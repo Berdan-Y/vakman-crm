@@ -1,0 +1,25 @@
+# Database services for local development.
+# Start: docker compose up -d pgsql
+# Stop:  docker compose down
+
+services:
+  pgsql:
+    image: postgres:16-alpine
+    container_name: vakman-pgsql
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - '${DB_PORT:-5433}:5432'
+    volumes:
+      - pgsql_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgsql_data:
