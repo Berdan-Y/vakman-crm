@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { BookOpen, Folder, LayoutGrid } from 'lucide-react';
+import { CompanySwitcher } from '@/components/company-switcher';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -53,6 +54,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
+                <CompanySwitcher />
                 <NavMain items={mainNavItems} />
             </SidebarContent>
 

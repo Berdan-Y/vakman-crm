@@ -1,9 +1,9 @@
 <?php
 
+use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-use Laravel\Fortify\Features;
 
 Route::get('/', function () {
     if (Auth::check()) {
@@ -13,8 +13,14 @@ Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
-Route::get('dashboard', function () {
-    return Inertia::render('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('companies', [CompanyController::class, 'index'])->name('companies.index');
+    Route::post('companies', [CompanyController::class, 'store'])->name('companies.store');
+    Route::post('companies/switch', [CompanyController::class, 'switch'])->name('companies.switch');
+});
+
+Route::middleware(['auth', 'verified', 'company'])->group(function () {
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
+});
 
 require __DIR__.'/settings.php';

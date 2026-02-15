@@ -10,8 +10,17 @@ export type User = {
     [key: string]: unknown;
 };
 
+export type Company = {
+    id: number;
+    name: string;
+    industry: string | null;
+    role: string;
+};
+
 export type Auth = {
     user: User;
+    companies: Company[];
+    currentCompany: Company | null;
 };
 
 export type TwoFactorSetupData = {
