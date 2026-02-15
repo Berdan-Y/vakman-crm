@@ -35,4 +35,17 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Dutch Address Lookup (Postcode.nl / Postcode.eu)
+    |--------------------------------------------------------------------------
+    | Set POSTCODE_API_KEY and optionally POSTCODE_API_URL for production.
+    | When no key is set, mock data is returned for development.
+    */
+    'postcode' => [
+        'key' => env('POSTCODE_API_KEY'),
+        'secret' => env('POSTCODE_API_SECRET'),
+        'url' => env('POSTCODE_API_URL', 'https://api.postcode.nl'),
+    ],
+
 ];

@@ -21,6 +21,11 @@ class Job extends Model
         'price',
         'is_paid',
         'date',
+        'scheduled_time',
+        'recommendation',
+        'job_info',
+        'job_type',
+        'job_type_other',
         'invoice_number',
     ];
 
@@ -30,6 +35,7 @@ class Job extends Model
             'price' => 'decimal:2',
             'is_paid' => 'boolean',
             'date' => 'date',
+            'job_info' => 'array',
         ];
     }
 

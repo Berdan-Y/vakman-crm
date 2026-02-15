@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid } from 'lucide-react';
+import { BookOpen, Briefcase, Folder, LayoutGrid, MapPin, Users } from 'lucide-react';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -22,6 +22,21 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+    },
+    {
+        title: 'Address search',
+        href: '/address-search',
+        icon: MapPin,
+    },
+    {
+        title: 'Employees',
+        href: '/employees',
+        icon: Users,
+    },
+    {
+        title: 'Jobs',
+        href: '/jobs',
+        icon: Briefcase,
     },
 ];
 
