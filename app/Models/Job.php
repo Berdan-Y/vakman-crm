@@ -24,7 +24,7 @@ class Job extends Model
         'scheduled_time',
         'recommendation',
         'job_info',
-        'job_type',
+        'job_type_id',
         'job_type_other',
         'invoice_number',
     ];
@@ -52,6 +52,24 @@ class Job extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function jobType(): BelongsTo
+    {
+        return $this->belongsTo(JobType::class, 'job_type_id');
+    }
+
+    public function getDisplayJobTypeAttribute(): ?string
+    {
+        if (! $this->jobType) {
+            return null;
+        }
+
+        if ($this->jobType->is_other && $this->job_type_other) {
+            return $this->job_type_other;
+        }
+
+        return $this->jobType->name;
     }
 
     public function invoices(): HasMany

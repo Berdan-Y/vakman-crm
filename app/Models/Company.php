@@ -42,4 +42,14 @@ class Company extends Model
     {
         return $this->hasMany(Job::class, 'company_id');
     }
+
+    public function jobTypes(): HasMany
+    {
+        return $this->hasMany(JobType::class);
+    }
+
+    public function whatsappCredential(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(WhatsAppCredential::class, 'company_id');
+    }
 }

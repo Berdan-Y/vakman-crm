@@ -1,4 +1,5 @@
 import { Head, router } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import {
     Card,
     CardContent,
@@ -17,13 +18,7 @@ import AppLayout from '@/layouts/app-layout';
 import { dashboard } from '@/routes';
 import { Briefcase, Euro, AlertCircle } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Dashboard',
-        href: typeof dashboard() === 'string' ? dashboard() : (dashboard() as { url: string }).url,
-    },
-];
+import { formatCurrency, toUrl } from '@/lib/utils';
 
 type Period = {
     type: string;
@@ -43,13 +38,6 @@ type Props = {
     period?: Period;
 };
 
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('nl-NL', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
-
 const defaultStats: Stats = {
     jobs_completed: 0,
     total_revenue: 0,
@@ -67,30 +55,39 @@ const defaultPeriod: Period = {
 };
 
 export default function Dashboard({ stats = defaultStats, period = defaultPeriod }: Props) {
-    const handlePeriodChange = (type: string, date: string) => {
-        router.get('/dashboard', { period: type, date }, { preserveState: true });
+    const { t } = useTranslation();
+    
+    const handlePeriodChange = (type: string) => {
+        router.get('/dashboard', { period: type }, { preserveState: true });
     };
+
+    const breadcrumbs: BreadcrumbItem[] = [
+        {
+            title: t('dashboard.title'),
+            href: toUrl(dashboard()),
+        },
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Dashboard" />
+            <Head title={t('dashboard.title')} />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <h2 className="text-lg font-semibold">Overview</h2>
+                    <h2 className="text-lg font-semibold">{t('dashboard.overview')}</h2>
                     <div className="flex items-center gap-2">
                         <Select
                             value={period.type}
                             onValueChange={(value) =>
-                                handlePeriodChange(value, period.start)
+                                handlePeriodChange(value)
                             }
                         >
                             <SelectTrigger className="w-[130px]">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="week">This week</SelectItem>
-                                <SelectItem value="month">This month</SelectItem>
-                                <SelectItem value="year">This year</SelectItem>
+                                <SelectItem value="week">{t('dashboard.thisWeek')}</SelectItem>
+                                <SelectItem value="month">{t('dashboard.thisMonth')}</SelectItem>
+                                <SelectItem value="year">{t('dashboard.thisYear')}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -101,7 +98,7 @@ export default function Dashboard({ stats = defaultStats, period = defaultPeriod
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">
-                                Jobs completed
+                                {t('dashboard.jobsCompleted')}
                             </CardTitle>
                             <Briefcase className="text-muted-foreground size-4" />
                         </CardHeader>
@@ -110,14 +107,14 @@ export default function Dashboard({ stats = defaultStats, period = defaultPeriod
                                 {stats.jobs_completed}
                             </div>
                             <CardDescription>
-                                Jobs completed in selected period
+                                {t('dashboard.jobsCompletedDesc')}
                             </CardDescription>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">
-                                Total revenue
+                                {t('dashboard.totalRevenue')}
                             </CardTitle>
                             <Euro className="text-muted-foreground size-4" />
                         </CardHeader>
@@ -126,14 +123,14 @@ export default function Dashboard({ stats = defaultStats, period = defaultPeriod
                                 {formatCurrency(stats.total_revenue)}
                             </div>
                             <CardDescription>
-                                Paid jobs in selected period
+                                {t('dashboard.totalRevenueDesc')}
                             </CardDescription>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">
-                                Unpaid bills
+                                {t('dashboard.unpaidBills')}
                             </CardTitle>
                             <AlertCircle className="text-muted-foreground size-4" />
                         </CardHeader>
@@ -142,7 +139,7 @@ export default function Dashboard({ stats = defaultStats, period = defaultPeriod
                                 {formatCurrency(stats.unpaid_bills)}
                             </div>
                             <CardDescription>
-                                Outstanding in selected period
+                                {t('dashboard.unpaidBillsDesc')}
                             </CardDescription>
                         </CardContent>
                     </Card>

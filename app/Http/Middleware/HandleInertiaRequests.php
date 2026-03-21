@@ -52,6 +52,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'locale' => app()->getLocale(),
             'auth' => [
                 'user' => $user,
                 'companies' => $companies,
@@ -63,6 +64,7 @@ class HandleInertiaRequests extends Middleware
                 ] : null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'csrf_token' => csrf_token(), // Ensure CSRF token is always fresh
         ];
     }
 }

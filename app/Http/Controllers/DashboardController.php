@@ -21,11 +21,43 @@ class DashboardController extends Controller
         }
 
         $period = $request->input('period', 'month');
-        $date = $request->input('date', now()->format('Y-m-d'));
+        $date = $request->input('date');
+
+        // If no date is provided or period just changed, use current date
+        if (! $date) {
+            $date = now()->format('Y-m-d');
+        }
+
         [$start, $end] = $this->periodRange($period, $date);
 
         $jobsQuery = Job::where('company_id', $companyId)
             ->whereBetween('date', [$start, $end]);
+
+        // Filter for employees to only see their own jobs
+        $user = $request->user();
+        $currentCompany = $user->companies()->where('company_id', $companyId)->first();
+        $userRole = $currentCompany?->pivot->role;
+
+        if ($userRole === 'employee') {
+            $employee = \App\Models\Employee::where('company_id', $companyId)
+                ->where('email', $user->email)
+                ->first();
+
+            if ($employee) {
+                $jobsQuery->where('employee_id', $employee->id);
+            } else {
+                // No employee record, return empty stats
+                return Inertia::render('dashboard', [
+                    'stats' => $this->emptyStats(),
+                    'period' => [
+                        'type' => $period,
+                        'label' => $this->periodLabel($period, $start, $end),
+                        'start' => $start->format('Y-m-d'),
+                        'end' => $end->format('Y-m-d'),
+                    ],
+                ]);
+            }
+        }
 
         $jobsCompleted = (clone $jobsQuery)->count();
         $totalRevenue = (clone $jobsQuery)->where('is_paid', true)->sum('price');

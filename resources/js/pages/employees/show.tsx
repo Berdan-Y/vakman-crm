@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     Card,
     CardContent,
@@ -6,9 +6,21 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { Briefcase, Mail, Phone, User, Calendar } from 'lucide-react';
+import { Briefcase, Mail, Phone, User, Calendar, Edit, Trash2 } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '@/lib/utils';
 
 type Job = {
     id: number;
@@ -29,6 +41,8 @@ type EmployeeDetail = {
     join_date: string | null;
     total_jobs: number;
     total_revenue: number;
+    user_id: number | null;
+    has_account: boolean;
     jobs: Job[];
 };
 
@@ -36,30 +50,81 @@ type Props = {
     employee: EmployeeDetail;
 };
 
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('nl-NL', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
-
 export default function EmployeesShow({ employee }: Props) {
+    const { t } = useTranslation();
+
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Employees', href: '/employees' },
+        { title: t('employees.title'), href: '/employees' },
         { title: employee.name, href: `/employees/${employee.id}` },
     ];
+
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [sendingInvitation, setSendingInvitation] = useState(false);
+
+    const handleDelete = () => {
+        router.delete(`/employees/${employee.id}`, {
+            onSuccess: () => {
+                setDeleteConfirmOpen(false);
+            },
+        });
+    };
+
+    const handleSendInvitation = () => {
+        setSendingInvitation(true);
+        router.post(
+            `/employees/${employee.id}/send-invitation`,
+            {},
+            {
+                onFinish: () => setSendingInvitation(false),
+            }
+        );
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={employee.name} />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!employee.has_account && (
+                        <Button
+                            variant="outline"
+                            onClick={handleSendInvitation}
+                            disabled={sendingInvitation}
+                        >
+                            {sendingInvitation ? (
+                                <>{t('employees.sendingInvitation')}</>
+                            ) : (
+                                <>
+                                    <Mail className="size-4" />
+                                    {t('employees.sendInvitation')}
+                                </>
+                            )}
+                        </Button>
+                    )}
+                    <Button variant="outline" asChild>
+                        <Link href={`/employees/${employee.id}/edit`}>
+                            <Edit className="size-4" />
+                            {t('common.edit')}
+                        </Link>
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        onClick={() => setDeleteConfirmOpen(true)}
+                    >
+                        <Trash2 className="size-4" />
+                        {t('common.delete')}
+                    </Button>
+                </div>
+
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <User className="size-5" />
                             {employee.name}
                         </CardTitle>
-                        <CardDescription>{employee.role || 'Employee'}</CardDescription>
+                        <CardDescription>
+                            {employee.role || t('companies.employee')}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-4 sm:grid-cols-2">
                         <div className="flex items-center gap-2 text-sm">
@@ -85,7 +150,7 @@ export default function EmployeesShow({ employee }: Props) {
                         {employee.join_date && (
                             <div className="flex items-center gap-2 text-sm">
                                 <Calendar className="text-muted-foreground size-4" />
-                                Joined {employee.join_date}
+                                {t('employees.joined')} {employee.join_date}
                             </div>
                         )}
                     </CardContent>
@@ -95,16 +160,16 @@ export default function EmployeesShow({ employee }: Props) {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Briefcase className="size-5" />
-                            Performance
+                            {t('employees.performance')}
                         </CardTitle>
                         <CardDescription>
-                            Jobs and revenue for this employee
+                            {t('employees.performanceDesc')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-6">
                         <div>
                             <p className="text-muted-foreground text-sm">
-                                Total jobs completed
+                                {t('employees.totalJobsCompleted')}
                             </p>
                             <p className="text-2xl font-semibold">
                                 {employee.total_jobs}
@@ -112,7 +177,7 @@ export default function EmployeesShow({ employee }: Props) {
                         </div>
                         <div>
                             <p className="text-muted-foreground text-sm">
-                                Total revenue
+                                {t('employees.totalRevenue')}
                             </p>
                             <p className="text-2xl font-semibold">
                                 {formatCurrency(employee.total_revenue)}
@@ -123,35 +188,35 @@ export default function EmployeesShow({ employee }: Props) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Job history</CardTitle>
+                        <CardTitle>{t('employees.jobHistory')}</CardTitle>
                         <CardDescription>
-                            All jobs assigned to this employee
+                            {t('employees.jobHistoryDesc')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         {employee.jobs.length === 0 ? (
                             <p className="text-muted-foreground text-sm">
-                                No jobs yet.
+                                {t('employees.noJobsYet')}
                             </p>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm min-w-[600px]">
                                     <thead>
                                         <tr className="border-b text-left">
                                             <th className="pb-2 font-medium">
-                                                Date
+                                                {t('common.date')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Description
+                                                {t('common.description')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Customer
+                                                {t('jobs.customer')}
                                             </th>
                                             <th className="pb-2 font-medium text-right">
-                                                Price
+                                                {t('common.price')}
                                             </th>
                                             <th className="pb-2 font-medium text-right">
-                                                Status
+                                                {t('common.status')}
                                             </th>
                                         </tr>
                                     </thead>
@@ -185,11 +250,11 @@ export default function EmployeesShow({ employee }: Props) {
                                                 <td className="py-2 text-right">
                                                     {job.is_paid ? (
                                                         <span className="text-green-600">
-                                                            Paid
+                                                            {t('jobs.paid')}
                                                         </span>
                                                     ) : (
                                                         <span className="text-amber-600">
-                                                            Unpaid
+                                                            {t('jobs.unpaid')}
                                                         </span>
                                                     )}
                                                 </td>
@@ -202,6 +267,30 @@ export default function EmployeesShow({ employee }: Props) {
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('employees.deleteEmployee')}</DialogTitle>
+                        <DialogDescription>
+                            {t('employees.deleteEmployeeConfirmNamed', {
+                                name: employee.name,
+                            })}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirmOpen(false)}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button variant="destructive" onClick={handleDelete}>
+                            {t('common.delete')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

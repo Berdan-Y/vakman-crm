@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -22,12 +23,14 @@ export default function Login({
     canResetPassword,
     canRegister,
 }: Props) {
+    const { t } = useTranslation();
+
     return (
         <AuthLayout
-            title="Service CRM"
-            description="Login to manage your business"
+            title={t('auth.loginTitle')}
+            description={t('auth.loginDesc')}
         >
-            <Head title="Log in" />
+            <Head title={t('auth.login')} />
 
             <Form
                 {...store.form()}
@@ -40,9 +43,9 @@ export default function Login({
                             <div className="grid gap-2">
                                 <Label
                                     htmlFor="email"
-                                    className="text-sm font-medium text-gray-700"
+                                    className="text-sm font-medium"
                                 >
-                                    Email
+                                    {t('auth.email')}
                                 </Label>
                                 <Input
                                     id="email"
@@ -52,8 +55,7 @@ export default function Login({
                                     autoFocus
                                     tabIndex={1}
                                     autoComplete="email"
-                                    placeholder="you@example.com"
-                                    className="rounded-lg border-gray-200 bg-white"
+                                    placeholder={t('auth.emailPlaceholder')}
                                 />
                                 <InputError message={errors.email} />
                             </div>
@@ -62,17 +64,17 @@ export default function Login({
                                 <div className="flex items-center">
                                     <Label
                                         htmlFor="password"
-                                        className="text-sm font-medium text-gray-700"
+                                        className="text-sm font-medium"
                                     >
-                                        Password
+                                        {t('auth.password')}
                                     </Label>
                                     {canResetPassword && (
                                         <TextLink
                                             href={request()}
-                                            className="ml-auto text-sm text-gray-500 hover:text-violet-600"
+                                            className="ml-auto text-sm hover:underline"
                                             tabIndex={5}
                                         >
-                                            Forgot password?
+                                            {t('auth.forgotPassword')}
                                         </TextLink>
                                     )}
                                 </div>
@@ -83,15 +85,14 @@ export default function Login({
                                     required
                                     tabIndex={2}
                                     autoComplete="current-password"
-                                    placeholder="••••••••"
-                                    className="rounded-lg border-gray-200 bg-white"
+                                    placeholder={t('auth.passwordPlaceholder')}
                                 />
                                 <InputError message={errors.password} />
                             </div>
 
                             <Button
                                 type="submit"
-                                className="mt-2 w-full rounded-lg bg-violet-600 py-2.5 text-white shadow-sm hover:bg-violet-700 focus-visible:ring-violet-500"
+                                className="mt-2 w-full"
                                 tabIndex={3}
                                 disabled={processing}
                                 data-test="login-button"
@@ -101,19 +102,19 @@ export default function Login({
                                 ) : (
                                     <Lock className="size-4" />
                                 )}
-                                Login
+                                {t('auth.login')}
                             </Button>
                         </div>
 
                         {canRegister && (
-                            <div className="text-center text-sm text-gray-500">
-                                Don't have an account?{' '}
+                            <div className="text-center text-sm text-muted-foreground">
+                                {t('auth.dontHaveAccount')}{' '}
                                 <TextLink
                                     href={register()}
                                     tabIndex={4}
-                                    className="font-medium text-violet-600 hover:text-violet-700"
+                                    className="font-medium hover:underline"
                                 >
-                                    Sign up
+                                    {t('auth.signUp')}
                                 </TextLink>
                             </div>
                         )}

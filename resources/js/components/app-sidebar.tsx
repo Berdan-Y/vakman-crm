@@ -1,5 +1,14 @@
-import { Link } from '@inertiajs/react';
-import { BookOpen, Briefcase, Folder, LayoutGrid, MapPin, Users } from 'lucide-react';
+import { Link, usePage } from '@inertiajs/react';
+import {
+    BarChart3,
+    BookOpen,
+    Briefcase,
+    Folder,
+    LayoutGrid,
+    MapPin,
+    Users,
+} from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -17,43 +26,45 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-    {
-        title: 'Address search',
-        href: '/address-search',
-        icon: MapPin,
-    },
-    {
-        title: 'Employees',
-        href: '/employees',
-        icon: Users,
-    },
-    {
-        title: 'Jobs',
-        href: '/jobs',
-        icon: Briefcase,
-    },
-];
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
-
 export function AppSidebar() {
+    const { auth } = usePage().props as any;
+    const userRole = auth?.currentCompany?.role;
+    const { t } = useTranslation();
+
+    const allNavItems: NavItem[] = [
+        {
+            title: t('nav.dashboard'),
+            href: dashboard(),
+            icon: LayoutGrid,
+        },
+        {
+            title: t('nav.addressSearch'),
+            href: '/address-search',
+            icon: MapPin,
+        },
+        {
+            title: t('nav.employees'),
+            href: '/employees',
+            icon: Users,
+            ownerOnly: true,
+        },
+        {
+            title: t('nav.jobs'),
+            href: '/jobs',
+            icon: Briefcase,
+        },
+        {
+            title: t('nav.reports'),
+            href: '/reports',
+            icon: BarChart3,
+        },
+    ];
+
+    // Filter nav items based on user role - hide ownerOnly items from employees
+    const mainNavItems = allNavItems.filter(
+        (item) => !item.ownerOnly || userRole !== 'employee',
+    );
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -74,7 +85,6 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

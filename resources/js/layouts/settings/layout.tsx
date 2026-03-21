@@ -6,10 +6,12 @@ import { Separator } from '@/components/ui/separator';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { cn, toUrl } from '@/lib/utils';
 import { edit as editAppearance } from '@/routes/appearance';
+import { edit as editLocale } from '@/routes/locale';
 import { edit } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
 import type { NavItem } from '@/types';
+import { useTranslation } from 'react-i18next';
 
 const sidebarNavItems: NavItem[] = [
     {
@@ -32,10 +34,59 @@ const sidebarNavItems: NavItem[] = [
         href: editAppearance(),
         icon: null,
     },
+    {
+        title: 'Language',
+        href: editLocale(),
+        icon: null,
+    },
+    {
+        title: 'Integrations',
+        href: '/settings/integrations',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentUrl } = useCurrentUrl();
+    const { t } = useTranslation();
+
+    const sidebarNavItems: NavItem[] = [
+        {
+            title: t('settings.profile'),
+            href: edit(),
+            icon: null,
+        },
+        {
+            title: t('settings.password'),
+            href: editPassword(),
+            icon: null,
+        },
+        {
+            title: t('settings.twoFactor'),
+            href: show(),
+            icon: null,
+        },
+        {
+            title: t('settings.appearance'),
+            href: editAppearance(),
+            icon: null,
+        },
+        {
+            title: t('settings.language'),
+            href: editLocale(),
+            icon: null,
+        },
+        {
+            title: t('settings.integrations'),
+            href: '/settings/integrations',
+            icon: null,
+        },
+        {
+            title: t('settings.jobTypes'),
+            href: '/settings/job-types',
+            icon: null,
+        },
+    ];
 
     // When server-side rendering, we only render the layout on the client...
     if (typeof window === 'undefined') {
@@ -45,8 +96,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     return (
         <div className="px-4 py-6">
             <Heading
-                title="Settings"
-                description="Manage your profile and account settings"
+                title={t('settings.title')}
+                description={t('settings.description')}
             />
 
             <div className="flex flex-col lg:flex-row lg:space-x-12">

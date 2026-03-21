@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -10,12 +11,14 @@ import { login } from '@/routes';
 import { store } from '@/routes/register';
 
 export default function Register() {
+    const { t } = useTranslation();
+
     return (
         <AuthLayout
-            title="Create an account"
-            description="Enter your details below to create your account"
+            title={t('auth.createAccountTitle')}
+            description={t('auth.createAccountDesc')}
         >
-            <Head title="Register" />
+            <Head title={t('auth.register')} />
             <Form
                 {...store.form()}
                 resetOnSuccess={['password', 'password_confirmation']}
@@ -26,7 +29,7 @@ export default function Register() {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="name">{t('common.name')}</Label>
                                 <Input
                                     id="name"
                                     type="text"
@@ -35,7 +38,7 @@ export default function Register() {
                                     tabIndex={1}
                                     autoComplete="name"
                                     name="name"
-                                    placeholder="Full name"
+                                    placeholder={t('auth.fullName')}
                                 />
                                 <InputError
                                     message={errors.name}
@@ -44,7 +47,7 @@ export default function Register() {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                                <Label htmlFor="email">{t('auth.email')}</Label>
                                 <Input
                                     id="email"
                                     type="email"
@@ -52,13 +55,13 @@ export default function Register() {
                                     tabIndex={2}
                                     autoComplete="email"
                                     name="email"
-                                    placeholder="email@example.com"
+                                    placeholder={t('auth.emailPlaceholder')}
                                 />
                                 <InputError message={errors.email} />
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="password">Password</Label>
+                                <Label htmlFor="password">{t('auth.password')}</Label>
                                 <Input
                                     id="password"
                                     type="password"
@@ -66,14 +69,14 @@ export default function Register() {
                                     tabIndex={3}
                                     autoComplete="new-password"
                                     name="password"
-                                    placeholder="Password"
+                                    placeholder={t('auth.passwordPlaceholder')}
                                 />
                                 <InputError message={errors.password} />
                             </div>
 
                             <div className="grid gap-2">
                                 <Label htmlFor="password_confirmation">
-                                    Confirm password
+                                    {t('auth.confirmPassword')}
                                 </Label>
                                 <Input
                                     id="password_confirmation"
@@ -82,7 +85,7 @@ export default function Register() {
                                     tabIndex={4}
                                     autoComplete="new-password"
                                     name="password_confirmation"
-                                    placeholder="Confirm password"
+                                    placeholder={t('auth.confirmPassword')}
                                 />
                                 <InputError
                                     message={errors.password_confirmation}
@@ -96,14 +99,14 @@ export default function Register() {
                                 data-test="register-user-button"
                             >
                                 {processing && <Spinner />}
-                                Create account
+                                {t('auth.createAccount')}
                             </Button>
                         </div>
 
-                        <div className="text-center text-sm text-muted">
-                            Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
-                                Log in
+                        <div className="text-center text-sm text-muted-foreground">
+                            {t('auth.alreadyHaveAccount')}{' '}
+                            <TextLink href={login()} tabIndex={6} className="font-medium hover:underline">
+                                {t('auth.signIn')}
                             </TextLink>
                         </div>
                     </>

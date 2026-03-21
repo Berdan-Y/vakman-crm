@@ -13,14 +13,4 @@ return [
         'call_15_min_before' => 'Call client 15 minutes beforehand',
         'wait_inside' => 'Wait inside',
     ],
-
-    'job_types' => [
-        'Lock repair',
-        'Key cutting',
-        'Emergency opening',
-        'Installation',
-        'Maintenance',
-        'Inspection',
-        'Other',
-    ],
 ];

@@ -1,4 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import {
     Card,
     CardContent,
@@ -9,11 +10,11 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import { Building2, Mail, Phone, User, Briefcase } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
+import { formatCurrency } from '@/lib/utils';
 
 type JobOptions = {
     recommendation: Record<string, string>;
     job_info: Record<string, string>;
-    job_types: string[];
 };
 
 type CustomerDetail = {
@@ -46,20 +47,20 @@ type Props = {
     jobOptions?: JobOptions;
 };
 
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('nl-NL', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
+const defaultJobOptions: JobOptions = {
+    recommendation: {},
+    job_info: {},
+};
 
 export default function CustomersShow({
     customer,
     jobs,
-    jobOptions = {},
+    jobOptions = defaultJobOptions,
 }: Props) {
+    const { t } = useTranslation();
+
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Address search', href: '/address-search' },
+        { title: t('addressSearch.title'), href: '/address-search' },
         { title: customer.name, href: `/customers/${customer.id}` },
     ];
 
@@ -80,10 +81,10 @@ export default function CustomersShow({
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <User className="size-5" />
-                            Customer details
+                            {t('customers.customerDetails')}
                         </CardTitle>
                         <CardDescription>
-                            Contact and address information
+                            {t('customers.contactAndAddress')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
@@ -122,42 +123,42 @@ export default function CustomersShow({
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Briefcase className="size-5" />
-                            Job history
+                            {t('customers.jobHistory')}
                         </CardTitle>
                         <CardDescription>
-                            All jobs for this customer
+                            {t('customers.allJobsForCustomer')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         {jobs.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
-                                No jobs yet for this customer.
+                                {t('customers.noJobsYet')}
                             </p>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm min-w-[700px]">
                                     <thead>
                                         <tr className="border-b text-left">
                                             <th className="pb-2 font-medium">
-                                                Date
+                                                {t('common.date')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Time
+                                                {t('common.time')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Description
+                                                {t('common.description')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Type
+                                                {t('common.type')}
                                             </th>
                                             <th className="pb-2 font-medium">
-                                                Employee
+                                                {t('jobs.employee')}
                                             </th>
                                             <th className="pb-2 text-right font-medium">
-                                                Price
+                                                {t('common.price')}
                                             </th>
                                             <th className="pb-2 text-right font-medium">
-                                                Status
+                                                {t('common.status')}
                                             </th>
                                             <th className="pb-2" />
                                         </tr>
@@ -189,11 +190,11 @@ export default function CustomersShow({
                                                 <td className="py-2 text-right">
                                                     {job.is_paid ? (
                                                         <span className="text-green-600">
-                                                            Paid
+                                                            {t('jobs.paid')}
                                                         </span>
                                                     ) : (
                                                         <span className="text-amber-600">
-                                                            Unpaid
+                                                            {t('jobs.unpaid')}
                                                         </span>
                                                     )}
                                                 </td>
@@ -202,7 +203,7 @@ export default function CustomersShow({
                                                         href={`/jobs/${job.id}`}
                                                         className="text-primary hover:underline"
                                                     >
-                                                        View
+                                                        {t('common.view')}
                                                     </Link>
                                                 </td>
                                             </tr>

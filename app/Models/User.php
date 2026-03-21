@@ -14,7 +14,11 @@ class User extends Authenticatable
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
     public const ROLE_OWNER = 'owner';
+
+    public const ROLE_ADMIN = 'admin';
+
     public const ROLE_EMPLOYEE = 'employee';
+
     public const ROLE_CUSTOMER = 'customer';
 
     /**
@@ -26,6 +30,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'locale',
     ];
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Company;
+use App\Models\JobType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -31,18 +32,17 @@ class CompanyController extends Controller
 
         $currentCompanyId = session('current_company_id');
 
-        if ($companies->isNotEmpty() && $currentCompanyId && $companies->contains('id', $currentCompanyId)) {
-            return redirect()->route('dashboard');
-        }
-
+        // If user has only one company and no current company set, auto-select it
         if ($companies->count() === 1 && ! $currentCompanyId) {
             session(['current_company_id' => $companies->first()['id']]);
 
-            return redirect()->route('dashboard');
+            // Use full redirect to ensure fresh CSRF token
+            return redirect('/dashboard');
         }
 
         return Inertia::render('companies/index', [
             'companies' => $companies,
+            'currentCompanyId' => $currentCompanyId,
         ]);
     }
 
@@ -62,9 +62,12 @@ class CompanyController extends Controller
 
         $company->users()->attach($user->id, ['role' => 'owner']);
 
+        JobType::seedDefaultsForCompany((int) $company->id);
+
         session(['current_company_id' => $company->id]);
 
-        return redirect()->route('dashboard')
+        // Use full redirect to ensure fresh CSRF token after company creation
+        return redirect('/dashboard')
             ->with('success', __('Company created successfully.'));
     }
 
@@ -79,9 +82,12 @@ class CompanyController extends Controller
             return back()->withErrors(['company_id' => __('You do not have access to this company.')]);
         }
 
-        session(['current_company_id' => $companyId]);
+        // Set the session
+        $request->session()->put('current_company_id', $companyId);
+        $request->session()->save();
 
-        return redirect()->route('dashboard')
-            ->with('success', __('Company switched successfully.'));
+        // Use a full redirect (not Inertia) to ensure fresh CSRF token
+        // This prevents session expiration errors after switching companies
+        return redirect('/dashboard');
     }
 }

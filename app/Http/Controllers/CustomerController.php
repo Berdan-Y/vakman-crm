@@ -16,9 +16,29 @@ class CustomerController extends Controller
             abort(404);
         }
 
-        $jobs = $customer->jobs()->with('employee')->orderByDesc('date')->orderByDesc('id')->get();
+        // Check user role
+        $user = $request->user();
+        $currentCompany = $user->companies()->where('company_id', $companyId)->first();
+        $userRole = $currentCompany?->pivot->role;
 
-        $jobOptions = config('job_options');
+        // Filter jobs for employees
+        $jobsQuery = $customer->jobs()->with(['employee', 'jobType'])->orderByDesc('date')->orderByDesc('id');
+
+        if ($userRole === 'employee') {
+            $employee = \App\Models\Employee::where('company_id', $companyId)
+                ->where('email', $user->email)
+                ->first();
+
+            if ($employee) {
+                $jobsQuery->where('employee_id', $employee->id);
+            } else {
+                $jobsQuery->whereRaw('1 = 0'); // Return no jobs
+            }
+        }
+
+        $jobs = $jobsQuery->get();
+
+        $jobOptions = \Illuminate\Support\Arr::except(config('job_options'), ['job_types']);
 
         return Inertia::render('customers/show', [
             'customer' => [
@@ -43,7 +63,7 @@ class CustomerController extends Controller
                 'price' => (float) $job->price,
                 'is_paid' => $job->is_paid,
                 'invoice_number' => $job->invoice_number,
-                'job_type' => $job->job_type,
+                'job_type' => $job->display_job_type,
                 'recommendation' => $job->recommendation,
                 'employee' => $job->employee ? [
                     'id' => $job->employee->id,

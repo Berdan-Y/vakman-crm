@@ -1,4 +1,6 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -8,17 +10,45 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { InvoicePdfDocument } from '@/components/invoice-pdf-document';
+import type { InvoiceDocumentCustomer } from '@/components/invoice-pdf-document';
 import AppLayout from '@/layouts/app-layout';
 import {
     Briefcase,
+    Loader2,
     User,
     Building2,
     Euro,
     FileText,
     Mail,
     Phone,
+    Plus,
+    Trash2,
+    ChevronLeft,
+    ChevronRight,
+    Edit,
 } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
+import { formatCurrency } from '@/lib/utils';
 
 type Invoice = {
     id: number;
@@ -31,10 +61,25 @@ type Invoice = {
     sent_at: string | null;
 };
 
+type InvoiceLineLocal = {
+    id: string;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+};
+
+type InvoiceLineAPI = {
+    id: number;
+    description: string;
+    quantity: number;
+    unit_price: number;
+    total: number;
+};
+
 type JobOptions = {
     recommendation: Record<string, string>;
     job_info: Record<string, string>;
-    job_types: string[];
 };
 
 type JobDetail = {
@@ -47,6 +92,7 @@ type JobDetail = {
     job_type: string | null;
     job_type_other: string | null;
     price: number;
+    base_price?: number;
     is_paid: boolean;
     invoice_number: string | null;
     customer: {
@@ -67,6 +113,7 @@ type JobDetail = {
         role: string | null;
     } | null;
     invoices: Invoice[];
+    whatsapp_sent_at: string | null;
 };
 
 type Props = {
@@ -74,45 +121,335 @@ type Props = {
     jobOptions?: JobOptions;
 };
 
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('nl-NL', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
-
 const defaultJobOptions: JobOptions = {
-    recommendation: { emergency: 'Emergency Service', regular: 'Regular Service' },
-    job_info: {
-        wait_at_neighbors: 'Wait at neighbors',
-        wait_at_door: 'Wait in front of the door',
-        appointment_job: 'Appointment job',
-        call_15_min_before: 'Call client 15 minutes beforehand',
-        wait_inside: 'Wait inside',
+    recommendation: {
+        emergency: 'jobs.emergency',
+        regular: 'jobs.regular',
     },
-    job_types: [],
+    job_info: {
+        wait_at_neighbors: 'jobs.waitAtNeighbors',
+        wait_at_door: 'jobs.waitAtDoor',
+        appointment_job: 'jobs.appointmentJob',
+        call_15_min_before: 'jobs.call15MinBefore',
+        wait_inside: 'jobs.waitInside',
+    },
 };
 
-export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props) {
+function getCsrfToken(): string {
+    return (
+        document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute('content') || ''
+    );
+}
+
+export default function JobsShow({
+    job,
+    jobOptions = defaultJobOptions,
+}: Props) {
+    const { auth } = usePage().props as any;
+    const userRole = auth?.currentCompany?.role;
+    const isEmployee = userRole === 'employee';
+    const { t } = useTranslation();
+    
+    const [invoiceOpen, setInvoiceOpen] = useState(false);
+    const [invoiceStep, setInvoiceStep] = useState<1 | 2>(1);
+    const [invoiceType, setInvoiceType] = useState<'customer' | 'employee'>(
+        'customer',
+    );
+    const [recipientName, setRecipientName] = useState('');
+    const [recipientEmail, setRecipientEmail] = useState('');
+    const [invoiceLines, setInvoiceLines] = useState<InvoiceLineLocal[]>([]);
+    const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+    const [whatsAppSending, setWhatsAppSending] = useState(false);
+    const [whatsAppMessage, setWhatsAppMessage] = useState<{
+        type: 'success' | 'error';
+        text: string;
+    } | null>(null);
+    const [localWhatsAppSentAt, setLocalWhatsAppSentAt] = useState<
+        string | null
+    >(null);
+    const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
+    const [invoicePreviewId, setInvoicePreviewId] = useState<number | null>(
+        null,
+    );
+    const [invoicePreviewData, setInvoicePreviewData] = useState<{
+        invoice: Props['job']['invoices'][0] & { created_at: string };
+        invoice_lines?: InvoiceLineAPI[];
+        job: {
+            id: number;
+            description: string | null;
+            date: string;
+            scheduled_time: string | null;
+            invoice_number: string | null;
+        };
+        customer: InvoiceDocumentCustomer;
+        company_name: string;
+    } | null>(null);
+    const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [invoiceToDelete, setInvoiceToDelete] = useState<number | null>(null);
+    const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [jobDeleteConfirmOpen, setJobDeleteConfirmOpen] = useState(false);
+    const [priceIncludesTax, setPriceIncludesTax] = useState(false);
+
+    const openCreateInvoice = () => {
+        setIsEditMode(false);
+        setEditingInvoiceId(null);
+        setInvoiceStep(1);
+        setInvoiceType('customer');
+        setRecipientName(job.customer?.name ?? '');
+        setRecipientEmail(job.customer?.email ?? '');
+        setInvoiceLines([
+            {
+                id: crypto.randomUUID(),
+                description: job.description || `Job #${job.id}`,
+                quantity: 1,
+                unit_price: job.price,
+                total: job.price,
+            },
+        ]);
+        setInvoiceOpen(true);
+    };
+
+    const openEditInvoice = useCallback((invId: number) => {
+        setInvoicePreviewLoading(true);
+        fetch(`/invoices/${invId}/preview`, {
+            headers: { Accept: 'application/json' },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setIsEditMode(true);
+                setEditingInvoiceId(invId);
+                setInvoiceStep(1);
+                setInvoiceType(data.invoice.type);
+                setRecipientName(data.invoice.recipient_name);
+                setRecipientEmail(data.invoice.recipient_email);
+                setInvoiceLines(
+                    (data.invoice_lines || []).map((line: InvoiceLineAPI) => ({
+                        id: String(line.id),
+                        description: line.description,
+                        quantity: line.quantity,
+                        unit_price: line.unit_price,
+                        total: line.total,
+                    })),
+                );
+                setInvoiceOpen(true);
+            })
+            .catch(() => {
+                alert(t('invoices.failedToLoadInvoiceData'));
+            })
+            .finally(() => setInvoicePreviewLoading(false));
+    }, []);
+
+    const openDeleteConfirm = (invId: number) => {
+        setInvoiceToDelete(invId);
+        setDeleteConfirmOpen(true);
+    };
+
+    const handleDeleteInvoice = () => {
+        if (invoiceToDelete) {
+            router.delete(`/invoices/${invoiceToDelete}`);
+            setDeleteConfirmOpen(false);
+            setInvoiceToDelete(null);
+        }
+    };
+
+    const onInvoiceTypeChange = (type: 'customer' | 'employee') => {
+        setInvoiceType(type);
+        if (type === 'customer') {
+            setRecipientName(job.customer?.name ?? '');
+            setRecipientEmail(job.customer?.email ?? '');
+        } else {
+            setRecipientName(job.employee?.name ?? '');
+            setRecipientEmail(job.employee?.email ?? '');
+        }
+    };
+
+    const addInvoiceLine = () => {
+        setInvoiceLines([
+            ...invoiceLines,
+            {
+                id: crypto.randomUUID(),
+                description: '',
+                quantity: 1,
+                unit_price: 0,
+                total: 0,
+            },
+        ]);
+    };
+
+    const updateInvoiceLine = (
+        id: string,
+        field: keyof Omit<InvoiceLineLocal, 'id'>,
+        value: string | number,
+    ) => {
+        setInvoiceLines((lines) =>
+            lines.map((line) => {
+                if (line.id !== id) return line;
+                const updated = { ...line, [field]: value };
+                if (field === 'quantity' || field === 'unit_price') {
+                    updated.total = updated.quantity * updated.unit_price;
+                }
+                return updated;
+            }),
+        );
+    };
+
+    const removeInvoiceLine = (id: string) => {
+        setInvoiceLines((lines) => lines.filter((line) => line.id !== id));
+    };
+
+    const getTotalAmount = () => {
+        return invoiceLines.reduce((sum, line) => sum + line.total, 0);
+    };
+
+    const submitInvoice = (send: boolean) => {
+        setInvoiceSubmitting(true);
+        
+        const invoiceData = {
+            type: invoiceType,
+            recipient_name: recipientName,
+            recipient_email: recipientEmail,
+            amount: getTotalAmount(),
+            price_includes_tax: priceIncludesTax,
+            lines: invoiceLines.map((line) => ({
+                description: line.description,
+                quantity: line.quantity,
+                unit_price: line.unit_price,
+                total: line.total,
+            })),
+            send,
+        };
+        
+        if (isEditMode && editingInvoiceId) {
+            router.put(
+                `/invoices/${editingInvoiceId}`,
+                invoiceData,
+                {
+                    onFinish: () => setInvoiceSubmitting(false),
+                    onSuccess: () => {
+                        setInvoiceOpen(false);
+                        setIsEditMode(false);
+                        setEditingInvoiceId(null);
+                    },
+                },
+            );
+        } else {
+            router.post(
+                '/invoices',
+                { ...invoiceData, job_id: job.id },
+                {
+                    onFinish: () => setInvoiceSubmitting(false),
+                    onSuccess: () => setInvoiceOpen(false),
+                },
+            );
+        }
+    };
+
+    const openInvoicePreview = useCallback((invId: number) => {
+        setInvoicePreviewId(invId);
+        setInvoicePreviewOpen(true);
+    }, []);
+
+    useEffect(() => {
+        if (!invoicePreviewOpen || invoicePreviewId == null) return;
+        setInvoicePreviewLoading(true);
+        setInvoicePreviewData(null);
+        fetch(`/invoices/${invoicePreviewId}/preview`, {
+            headers: { Accept: 'application/json' },
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                setInvoicePreviewData(data);
+            })
+            .catch(() => setInvoicePreviewData(null))
+            .finally(() => setInvoicePreviewLoading(false));
+    }, [invoicePreviewOpen, invoicePreviewId]);
+
+    const closeInvoicePreview = useCallback(() => {
+        setInvoicePreviewOpen(false);
+        setInvoicePreviewId(null);
+        setInvoicePreviewData(null);
+    }, []);
+
+    const sendWhatsApp = async () => {
+        setWhatsAppMessage(null);
+        setWhatsAppSending(true);
+        try {
+            const res = await fetch(`/jobs/${job.id}/send-whatsapp`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            });
+            const data = await res.json();
+            if (data.success && data.sent_at) {
+                setLocalWhatsAppSentAt(data.sent_at);
+            }
+            const recipient = data.recipient_phone
+                ? ` Sent to +${data.recipient_phone.replace(/(\d{2})(?=\d)/g, '$1 ').trim()}.`
+                : '';
+            const viaId =
+                data.success && data.phone_number_id
+                    ? ` Via Phone number ID: ${data.phone_number_id}.`
+                    : '';
+            const sourceNote =
+                data.success && data.credential_source
+                    ? ` Credential: ${data.credential_source === 'company' ? 'Settings → Integrations' : 'app (.env)'}.`
+                    : '';
+            setWhatsAppMessage({
+                type: data.success ? 'success' : 'error',
+                text:
+                    (data.message ||
+                        (data.success ? t('jobs.whatsappSent') : t('jobs.whatsappFailed'))) +
+                    recipient +
+                    viaId +
+                    sourceNote,
+            });
+        } catch {
+            setWhatsAppMessage({
+                type: 'error',
+                text: t('jobs.whatsappError'),
+            });
+        } finally {
+            setWhatsAppSending(false);
+        }
+    };
+
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Jobs', href: '/jobs' },
-        { title: `Job #${job.id}`, href: `/jobs/${job.id}` },
+        { title: t('nav.jobs'), href: '/jobs' },
+        { title: `${t('jobs.title')} #${job.id}`, href: `/jobs/${job.id}` },
     ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Job #${job.id}`} />
+            <Head title={`${t('jobs.title')} #${job.id}`} />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
-                    <h2 className="text-lg font-semibold">Job #{job.id}</h2>
-                    {!job.is_paid && (
-                        <Button
-                            onClick={() =>
-                                router.post(`/jobs/${job.id}/mark-paid`)
-                            }
-                        >
-                            Mark as paid
-                        </Button>
+                    <h2 className="text-lg font-semibold">{t('jobs.title')} #{job.id}</h2>
+                    {!isEmployee && (
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => router.visit(`/jobs/${job.id}/edit`)}
+                            >
+                                <Edit className="size-4" />
+                                {t('common.edit')}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setJobDeleteConfirmOpen(true)}
+                            >
+                                <Trash2 className="size-4 text-destructive" />
+                                {t('common.delete')}
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -121,14 +458,14 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Briefcase className="size-5" />
-                                Job information
+                                {t('jobs.jobInformation')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2 text-sm">
                             {job.scheduled_time && (
                                 <p>
                                     <span className="text-muted-foreground">
-                                        Time:
+                                        {t('common.time')}:
                                     </span>{' '}
                                     {job.scheduled_time}
                                 </p>
@@ -136,20 +473,26 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                             {job.recommendation && (
                                 <p>
                                     <span className="text-muted-foreground">
-                                        Recommendation:
+                                        {t('jobs.recommendation')}:
                                     </span>{' '}
-                                    {(jobOptions.recommendation && jobOptions.recommendation[job.recommendation]) ?? job.recommendation}
+                                    {(jobOptions.recommendation &&
+                                        t(jobOptions.recommendation[
+                                            job.recommendation
+                                        ] || job.recommendation)) ??
+                                        job.recommendation}
                                 </p>
                             )}
                             {job.job_info.length > 0 && (
                                 <p>
                                     <span className="text-muted-foreground">
-                                        Job info:
+                                        {t('jobs.jobInfo')}:
                                     </span>{' '}
                                     {job.job_info
                                         .map(
                                             (key) =>
-                                                (jobOptions.job_info && jobOptions.job_info[key]) ?? key
+                                                (jobOptions.job_info &&
+                                                    t(jobOptions.job_info[key] || key)) ??
+                                                key,
                                         )
                                         .join(', ')}
                                 </p>
@@ -157,45 +500,52 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                             {job.job_type && (
                                 <p>
                                     <span className="text-muted-foreground">
-                                        Job type:
+                                        {t('jobs.jobType')}:
                                     </span>{' '}
-                                    {job.job_type === 'Other' && job.job_type_other
-                                        ? job.job_type_other
-                                        : job.job_type}
+                                    {job.job_type}
                                 </p>
                             )}
                             <p>
                                 <span className="text-muted-foreground">
-                                    Description:
+                                    {t('common.description')}:
                                 </span>{' '}
                                 {job.description || '—'}
                             </p>
                             <p>
                                 <span className="text-muted-foreground">
-                                    Invoice:
+                                    {t('jobs.invoice')}:
                                 </span>{' '}
                                 {job.invoice_number || '—'}
                             </p>
                             <p>
                                 <span className="text-muted-foreground">
-                                    Date:
+                                    {t('common.date')}:
                                 </span>{' '}
                                 {job.date}
                             </p>
+                            <div>
+                                <p>
+                                    <span className="text-muted-foreground">
+                                        {t('common.price')}:
+                                    </span>{' '}
+                                    {formatCurrency(job.price)}
+                                </p>
+                                {job.base_price && job.price !== job.base_price && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        {t('jobs.totalFromCustomerInvoices')}
+                                        <br />
+                                        {t('jobs.basePrice')}: {formatCurrency(job.base_price)}
+                                    </p>
+                                )}
+                            </div>
                             <p>
                                 <span className="text-muted-foreground">
-                                    Price:
-                                </span>{' '}
-                                {formatCurrency(job.price)}
-                            </p>
-                            <p>
-                                <span className="text-muted-foreground">
-                                    Status:
+                                    {t('common.status')}:
                                 </span>{' '}
                                 {job.is_paid ? (
-                                    <Badge variant="default">Paid</Badge>
+                                    <Badge variant="default">{t('jobs.paid')}</Badge>
                                 ) : (
-                                    <Badge variant="secondary">Unpaid</Badge>
+                                    <Badge variant="secondary">{t('jobs.unpaid')}</Badge>
                                 )}
                             </p>
                         </CardContent>
@@ -206,11 +556,13 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <User className="size-5" />
-                                    Customer
+                                    {t('jobs.customer')}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2 text-sm">
-                                <p className="font-medium">{job.customer.name}</p>
+                                <p className="font-medium">
+                                    {job.customer.name}
+                                </p>
                                 {job.customer.phone && (
                                     <p className="flex items-center gap-1">
                                         <Phone className="size-4" />
@@ -226,8 +578,9 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                                 <p className="flex items-center gap-1">
                                     <Building2 className="size-4" />
                                     {[
-                                        job.customer.street,
-                                        job.customer.house_number,
+                                        [job.customer.street, job.customer.house_number]
+                                            .filter(Boolean)
+                                            .join(' '),
                                         job.customer.zip_code,
                                         job.customer.city,
                                     ]
@@ -243,11 +596,13 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
                                     <Building2 className="size-5" />
-                                    Assigned employee
+                                    {t('jobs.assignedEmployee')}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2 text-sm">
-                                <p className="font-medium">{job.employee.name}</p>
+                                <p className="font-medium">
+                                    {job.employee.name}
+                                </p>
                                 {job.employee.role && (
                                     <p className="text-muted-foreground">
                                         {job.employee.role}
@@ -263,6 +618,36 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                                         {job.employee.phone}
                                     </p>
                                 )}
+                                <div className="space-y-1 pt-2">
+                                    <p className="text-xs text-muted-foreground">
+                                        {t('jobs.sendWhatsAppDesc')}
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={sendWhatsApp}
+                                        disabled={whatsAppSending}
+                                    >
+                                        {whatsAppSending
+                                            ? t('jobs.sending')
+                                            : job.whatsapp_sent_at ||
+                                                localWhatsAppSentAt
+                                              ? t('jobs.resendWhatsApp')
+                                              : t('jobs.sendWhatsApp')}
+                                    </Button>
+                                    {whatsAppMessage && (
+                                        <p
+                                            className={
+                                                whatsAppMessage.type ===
+                                                'success'
+                                                    ? 'mt-2 text-sm text-green-600'
+                                                    : 'mt-2 text-sm text-destructive'
+                                            }
+                                        >
+                                            {whatsAppMessage.text}
+                                        </p>
+                                    )}
+                                </div>
                             </CardContent>
                         </Card>
                     )}
@@ -270,41 +655,495 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <FileText className="size-5" />
-                            Invoices
-                        </CardTitle>
-                        <CardDescription>
-                            Customer and employee invoices for this job
-                        </CardDescription>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                    <FileText className="size-5" />
+                                    {t('invoices.title')}
+                                </CardTitle>
+                                <CardDescription>
+                                    {t('invoices.customerAndEmployeeInvoices')}
+                                </CardDescription>
+                            </div>
+                            <Dialog
+                                open={invoiceOpen}
+                                onOpenChange={setInvoiceOpen}
+                            >
+                                <DialogTrigger asChild>
+                                    <Button onClick={openCreateInvoice}>
+                                        <Plus className="size-4" />
+                                        {t('invoices.createInvoice')}
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                                    <DialogHeader>
+                                        <DialogTitle>
+                                            {isEditMode
+                                                ? invoiceStep === 1
+                                                    ? t('invoices.editInvoiceRecipient')
+                                                    : t('invoices.editInvoiceLineItems')
+                                                : invoiceStep === 1
+                                                  ? t('invoices.createInvoiceRecipient')
+                                                  : t('invoices.createInvoiceLineItems')}
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                            {invoiceStep === 1
+                                                ? t('invoices.selectInvoiceTypeDesc')
+                                                : t('invoices.addLineItemsDesc')}
+                                        </DialogDescription>
+                                    </DialogHeader>
+
+                                    {invoiceStep === 1 ? (
+                                        <>
+                                            <div className="grid gap-4 py-4">
+                                                <div className="grid gap-2">
+                                                    <Label>{t('invoices.invoiceType')}</Label>
+                                                    <Select
+                                                        value={invoiceType}
+                                                        onValueChange={(v) =>
+                                                            onInvoiceTypeChange(
+                                                                v as
+                                                                    | 'customer'
+                                                                    | 'employee',
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="customer">
+                                                                {t('invoices.customerInvoice')}
+                                                            </SelectItem>
+                                                            <SelectItem value="employee">
+                                                                {t('invoices.employeeInvoice')}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="inv-recipient-name">
+                                                        {t('invoices.recipientName')}
+                                                    </Label>
+                                                    <Input
+                                                        id="inv-recipient-name"
+                                                        value={recipientName}
+                                                        onChange={(e) =>
+                                                            setRecipientName(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <Label htmlFor="inv-recipient-email">
+                                                        {t('invoices.recipientEmail')}
+                                                    </Label>
+                                                    <Input
+                                                        id="inv-recipient-email"
+                                                        type="email"
+                                                        value={recipientEmail}
+                                                        onChange={(e) =>
+                                                            setRecipientEmail(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+                                            <DialogFooter>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setInvoiceOpen(false)
+                                                    }
+                                                >
+                                                    {t('common.cancel')}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setInvoiceStep(2)
+                                                    }
+                                                    disabled={
+                                                        !recipientName.trim() ||
+                                                        !recipientEmail.trim()
+                                                    }
+                                                >
+                                                    {t('invoices.nextAddLineItems')}
+                                                    <ChevronRight className="ml-1 size-4" />
+                                                </Button>
+                                            </DialogFooter>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-4 py-4">
+                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                    <Label className="text-base">
+                                                        {t('invoices.invoiceLines')}
+                                                    </Label>
+                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                        <div className="flex items-center gap-2">
+                                                            <Switch
+                                                                id="invoice-price-includes-tax"
+                                                                checked={priceIncludesTax}
+                                                                onCheckedChange={setPriceIncludesTax}
+                                                            />
+                                                            <Label
+                                                                htmlFor="invoice-price-includes-tax"
+                                                                className="text-sm font-normal cursor-pointer whitespace-nowrap"
+                                                            >
+                                                                {t('invoices.inclTax')}
+                                                            </Label>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={addInvoiceLine}
+                                                        >
+                                                            <Plus className="size-4" />
+                                                            {t('invoices.addLine')}
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                {invoiceLines.length === 0 ? (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {t('invoices.noLineItemsYet')}
+                                                    </p>
+                                                ) : (
+                                                    <div className="space-y-3">
+                                                        {invoiceLines.map(
+                                                            (line) => (
+                                                                <div
+                                                                    key={line.id}
+                                                                    className="grid gap-2 rounded border p-3"
+                                                                >
+                                                                    <div className="grid gap-2">
+                                                                        <Label htmlFor={`line-desc-${line.id}`}>
+                                                                            {t('common.description')}
+                                                                        </Label>
+                                                                        <Input
+                                                                            id={`line-desc-${line.id}`}
+                                                                            value={
+                                                                                line.description
+                                                                            }
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                updateInvoiceLine(
+                                                                                    line.id,
+                                                                                    'description',
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                                )
+                                                                            }
+                                                                            placeholder={t('invoices.serviceItemPlaceholder')}
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                        <div className="grid gap-2">
+                                                                            <Label htmlFor={`line-qty-${line.id}`}>
+                                                                                {t('invoices.quantity')}
+                                                                            </Label>
+                                                                            <Input
+                                                                                id={`line-qty-${line.id}`}
+                                                                                type="number"
+                                                                                step="0.01"
+                                                                                min="0.01"
+                                                                                value={
+                                                                                    line.quantity
+                                                                                }
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) =>
+                                                                                    updateInvoiceLine(
+                                                                                        line.id,
+                                                                                        'quantity',
+                                                                                        parseFloat(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        ) ||
+                                                                                            0,
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid gap-2">
+                                                                            <Label htmlFor={`line-price-${line.id}`}>
+                                                                                {t('invoices.unitPriceEuro')}
+                                                                            </Label>
+                                                                            <Input
+                                                                                id={`line-price-${line.id}`}
+                                                                                type="number"
+                                                                                step="0.01"
+                                                                                min="0"
+                                                                                value={
+                                                                                    line.unit_price
+                                                                                }
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) =>
+                                                                                    updateInvoiceLine(
+                                                                                        line.id,
+                                                                                        'unit_price',
+                                                                                        parseFloat(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                        ) ||
+                                                                                            0,
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                        <div className="grid gap-2">
+                                                                            <Label>
+                                                                                {t('invoices.totalEuro')}
+                                                                            </Label>
+                                                                            <Input
+                                                                                value={line.total.toFixed(
+                                                                                    2,
+                                                                                )}
+                                                                                disabled
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="w-fit"
+                                                                        onClick={() =>
+                                                                            removeInvoiceLine(
+                                                                                line.id,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Trash2 className="size-4 text-destructive" />
+                                                                        {t('invoices.remove')}
+                                                                    </Button>
+                                                                </div>
+                                                            ),
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div className="space-y-2">
+                                                    {priceIncludesTax ? (
+                                                        <>
+                                                            <div className="flex items-center justify-between rounded border bg-muted/50 p-3 text-sm">
+                                                                <span>{t('invoices.subtotalExclTax')}:</span>
+                                                                <span>
+                                                                    €{' '}
+                                                                    {(getTotalAmount() / 1.21).toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded border bg-muted/50 p-3 text-sm">
+                                                                <span>{t('invoices.taxAmount')}:</span>
+                                                                <span>
+                                                                    €{' '}
+                                                                    {(getTotalAmount() - getTotalAmount() / 1.21).toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded border bg-muted p-3">
+                                                                <span className="font-medium">
+                                                                    {t('invoices.totalInclTax')}:
+                                                                </span>
+                                                                <span className="text-lg font-semibold">
+                                                                    €{' '}
+                                                                    {getTotalAmount().toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="flex items-center justify-between rounded border bg-muted/50 p-3 text-sm">
+                                                                <span>{t('invoices.subtotalExclTax')}:</span>
+                                                                <span>
+                                                                    €{' '}
+                                                                    {getTotalAmount().toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded border bg-muted/50 p-3 text-sm">
+                                                                <span>{t('invoices.taxAmount')}:</span>
+                                                                <span>
+                                                                    €{' '}
+                                                                    {(getTotalAmount() * 0.21).toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded border bg-muted p-3">
+                                                                <span className="font-medium">
+                                                                    {t('invoices.totalInclTax')}:
+                                                                </span>
+                                                                <span className="text-lg font-semibold">
+                                                                    €{' '}
+                                                                    {(getTotalAmount() * 1.21).toFixed(2)}
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <DialogFooter className="gap-2 flex-col sm:flex-row">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setInvoiceStep(1)
+                                                    }
+                                                    disabled={
+                                                        invoiceSubmitting
+                                                    }
+                                                    className="w-full sm:w-auto"
+                                                >
+                                                    <ChevronLeft className="size-4" />
+                                                    {t('common.back')}
+                                                </Button>
+                                                <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            submitInvoice(false)
+                                                        }
+                                                        disabled={
+                                                            invoiceSubmitting ||
+                                                            invoiceLines.length ===
+                                                                0 ||
+                                                            invoiceLines.some(
+                                                                (line) =>
+                                                                    !line.description.trim(),
+                                                            )
+                                                        }
+                                                        className="flex-1 sm:flex-none"
+                                                    >
+                                                        {isEditMode
+                                                            ? t('invoices.saveAsDraft')
+                                                            : t('invoices.createDraft')}
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            submitInvoice(true)
+                                                        }
+                                                        disabled={
+                                                            invoiceSubmitting ||
+                                                            invoiceLines.length ===
+                                                                0 ||
+                                                            invoiceLines.some(
+                                                                (line) =>
+                                                                    !line.description.trim(),
+                                                            )
+                                                        }
+                                                        className="flex-1 sm:flex-none"
+                                                    >
+                                                        {isEditMode
+                                                            ? t('invoices.saveAndSend')
+                                                            : t('invoices.createAndSend')}
+                                                    </Button>
+                                                </div>
+                                            </DialogFooter>
+                                        </>
+                                    )}
+                                </DialogContent>
+                            </Dialog>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {job.invoices.length === 0 ? (
-                            <p className="text-muted-foreground text-sm">
-                                No invoices yet. Invoice creation will be
-                                available in the invoicing module.
+                            <p className="text-sm text-muted-foreground">
+                                {t('invoices.noInvoicesYet')}
                             </p>
                         ) : (
                             <ul className="space-y-2">
                                 {job.invoices.map((inv) => (
                                     <li
                                         key={inv.id}
-                                        className="flex items-center justify-between rounded border p-2 text-sm"
+                                        className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-2 rounded border p-2 text-sm"
                                     >
-                                        <span>
+                                        <span className="min-w-0 break-words">
                                             {inv.type} — {inv.recipient_name} (
-                                            {inv.recipient_email}) —{' '}
+                                            <span className="break-all">{inv.recipient_email}</span>) —{' '}
                                             {formatCurrency(inv.amount)}
                                         </span>
-                                        <Badge
-                                            variant={
-                                                inv.status === 'paid'
-                                                    ? 'default'
-                                                    : 'secondary'
-                                            }
-                                        >
-                                            {inv.status}
-                                        </Badge>
+                                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    openInvoicePreview(inv.id)
+                                                }
+                                            >
+                                                {inv.status === 'draft'
+                                                    ? t('invoices.viewDraft')
+                                                    : t('common.view')}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    openEditInvoice(inv.id)
+                                                }
+                                                title={t('invoices.editInvoiceTitle')}
+                                            >
+                                                <Edit className="size-4" />
+                                            </Button>
+                                            {inv.status === 'draft' && (
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        router.post(
+                                                            `/invoices/${inv.id}/send`,
+                                                        )
+                                                    }
+                                                    title={t('invoices.sendInvoiceTitle')}
+                                                >
+                                                    <Mail className="size-4" />
+                                                    {t('invoices.send')}
+                                                </Button>
+                                            )}
+                                            {inv.status === 'sent' && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        router.post(
+                                                            `/invoices/${inv.id}/mark-paid`,
+                                                        )
+                                                    }
+                                                >
+                                                    {t('invoices.markPaid')}
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    openDeleteConfirm(inv.id)
+                                                }
+                                                title={t('invoices.deleteInvoiceTitle')}
+                                            >
+                                                <Trash2 className="size-4 text-destructive" />
+                                            </Button>
+                                            <Badge
+                                                variant={
+                                                    inv.status === 'paid'
+                                                        ? 'default'
+                                                        : inv.status === 'sent'
+                                                          ? 'secondary'
+                                                          : 'outline'
+                                                }
+                                            >
+                                                {inv.status}
+                                            </Badge>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -312,6 +1151,113 @@ export default function JobsShow({ job, jobOptions = defaultJobOptions }: Props)
                     </CardContent>
                 </Card>
             </div>
+
+            <Dialog
+                open={invoicePreviewOpen}
+                onOpenChange={(open) => !open && closeInvoicePreview()}
+            >
+                <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle>{t('invoices.invoicePreview')}</DialogTitle>
+                        <DialogDescription>
+                            {t('invoices.invoicePreviewDesc')}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="min-h-0 flex-1 overflow-auto rounded border bg-[#f5f5f5] p-4">
+                        {invoicePreviewLoading && (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="size-8 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
+                        {!invoicePreviewLoading && invoicePreviewData && (
+                            <InvoicePdfDocument
+                                invoice={invoicePreviewData.invoice}
+                                invoice_lines={
+                                    invoicePreviewData.invoice_lines
+                                }
+                                job={invoicePreviewData.job}
+                                customer={invoicePreviewData.customer}
+                                company_name={invoicePreviewData.company_name}
+                                className="bg-white"
+                            />
+                        )}
+                        {!invoicePreviewLoading &&
+                            !invoicePreviewData &&
+                            invoicePreviewId != null && (
+                                <p className="py-8 text-center text-sm text-muted-foreground">
+                                    {t('invoices.couldNotLoadPreview')}
+                                </p>
+                            )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeInvoicePreview}>
+                            {t('common.close')}
+                        </Button>
+                        {invoicePreviewData && (
+                            <Button
+                                onClick={() =>
+                                    window.open(
+                                        `/invoices/${invoicePreviewId}`,
+                                        '_blank',
+                                    )
+                                }
+                            >
+                                {t('invoices.openInNewTab')}
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('invoices.deleteInvoiceTitle')}</DialogTitle>
+                        <DialogDescription>
+                            {t('invoices.deleteInvoiceConfirm')}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeleteConfirmOpen(false)}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteInvoice}
+                        >
+                            {t('common.delete')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={jobDeleteConfirmOpen} onOpenChange={setJobDeleteConfirmOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{t('jobs.deleteJob')}</DialogTitle>
+                        <DialogDescription>
+                            {t('jobs.deleteJobConfirm')}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setJobDeleteConfirmOpen(false)}
+                        >
+                            {t('common.cancel')}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => router.delete(`/jobs/${job.id}`)}
+                        >
+                            {t('jobs.deleteJob')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

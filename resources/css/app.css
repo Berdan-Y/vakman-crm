@@ -141,3 +141,14 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Invoice print: hide app chrome so only the invoice content shows */
+@media print {
+    body.invoice-print-view [data-sidebar='sidebar'] {
+        display: none !important;
+    }
+
+    body.invoice-print-view main > header:first-of-type {
+        display: none !important;
+    }
+}

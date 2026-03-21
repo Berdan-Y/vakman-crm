@@ -1,4 +1,5 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -17,8 +18,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/app-layout';
-import { Briefcase, Plus } from 'lucide-react';
+import { Briefcase, Plus, X } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
+import { formatCurrency } from '@/lib/utils';
 
 type Job = {
     id: number;
@@ -46,51 +48,72 @@ type Props = {
     };
 };
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Jobs', href: '/jobs' },
-];
-
-function formatCurrency(value: number): string {
-    return new Intl.NumberFormat('nl-NL', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(value);
-}
-
 export default function JobsIndex({ jobs, employees, filters }: Props) {
+    const { auth } = usePage().props as any;
+    const userRole = auth?.currentCompany?.role;
+    const isEmployee = userRole === 'employee';
+    const { t } = useTranslation();
+    
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: t('jobs.title'), href: '/jobs' },
+    ];
+    
     const applyFilters = (newFilters: Record<string, string | undefined>) => {
         router.get('/jobs', { ...filters, ...newFilters }, { preserveState: true });
     };
 
+    const resetFilters = () => {
+        router.get('/jobs', {}, { preserveState: true });
+    };
+
+    const hasActiveFilters =
+        filters.status || filters.employee_id || filters.date_from || filters.date_to;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Jobs" />
+            <Head title={t('jobs.title')} />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                        <h2 className="text-lg font-semibold">Jobs</h2>
+                        <h2 className="text-lg font-semibold">{t('jobs.title')}</h2>
                         <p className="text-muted-foreground text-sm">
-                            View and manage all jobs
+                            {t('jobs.description')}
                         </p>
                     </div>
-                    <Button asChild>
-                        <Link href="/jobs/create">
-                            <Plus className="size-4" />
-                            Create job
-                        </Link>
-                    </Button>
+                    {!isEmployee && (
+                        <Button asChild>
+                            <Link href="/jobs/create">
+                                <Plus className="size-4" />
+                                {t('jobs.createJob')}
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Filters</CardTitle>
-                        <CardDescription>
-                            Filter by payment status, employee, or date range
-                        </CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>{t('jobs.filters')}</CardTitle>
+                                <CardDescription>
+                                    {t('jobs.filtersDesc')}
+                                </CardDescription>
+                            </div>
+                            {hasActiveFilters && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={resetFilters}
+                                >
+                                    <X className="size-4" />
+                                    {t('jobs.resetFilters')}
+                                </Button>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-4">
                         <div className="grid gap-2">
-                            <Label>Status</Label>
+                            <Label>{t('common.status')}</Label>
                             <Select
                                 value={filters.status ?? 'all'}
                                 onValueChange={(v) =>
@@ -103,14 +126,14 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
-                                    <SelectItem value="paid">Paid</SelectItem>
-                                    <SelectItem value="unpaid">Unpaid</SelectItem>
+                                    <SelectItem value="all">{t('common.all')}</SelectItem>
+                                    <SelectItem value="paid">{t('jobs.paid')}</SelectItem>
+                                    <SelectItem value="unpaid">{t('jobs.unpaid')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="grid gap-2">
-                            <Label>Employee</Label>
+                            <Label>{t('jobs.employee')}</Label>
                             <Select
                                 value={filters.employee_id ?? 'all'}
                                 onValueChange={(v) =>
@@ -121,10 +144,10 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                                 }
                             >
                                 <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="All" />
+                                    <SelectValue placeholder={t('common.all')} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="all">{t('common.all')}</SelectItem>
                                     {employees.map((e) => (
                                         <SelectItem
                                             key={e.id}
@@ -137,7 +160,7 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                             </Select>
                         </div>
                         <div className="grid gap-2">
-                            <Label>From date</Label>
+                            <Label>{t('jobs.fromDate')}</Label>
                             <Input
                                 type="date"
                                 value={filters.date_from ?? ''}
@@ -150,7 +173,7 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label>To date</Label>
+                            <Label>{t('jobs.toDate')}</Label>
                             <Input
                                 type="date"
                                 value={filters.date_to ?? ''}
@@ -170,12 +193,12 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                         <CardContent className="flex flex-col items-center justify-center py-12">
                             <Briefcase className="text-muted-foreground size-12" />
                             <p className="text-muted-foreground mt-2 text-sm">
-                                No jobs match your filters
+                                {t('jobs.noJobsMatch')}
                             </p>
                             <Button asChild className="mt-4" variant="outline">
                                 <Link href="/jobs/create">
                                     <Plus className="size-4" />
-                                    Create a job
+                                    {t('jobs.createAJob')}
                                 </Link>
                             </Button>
                         </CardContent>
@@ -184,32 +207,32 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                     <Card>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm min-w-[700px]">
                                     <thead>
                                         <tr className="border-b bg-muted/50">
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Date
+                                                {t('common.date')}
                                             </th>
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Time
+                                                {t('common.time')}
                                             </th>
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Description
+                                                {t('common.description')}
                                             </th>
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Type
+                                                {t('common.type')}
                                             </th>
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Customer
+                                                {t('jobs.customer')}
                                             </th>
                                             <th className="px-4 py-3 text-left font-medium">
-                                                Employee
+                                                {t('jobs.employee')}
                                             </th>
                                             <th className="px-4 py-3 text-right font-medium">
-                                                Price
+                                                {t('common.price')}
                                             </th>
                                             <th className="px-4 py-3 text-right font-medium">
-                                                Status
+                                                {t('common.status')}
                                             </th>
                                             <th className="px-4 py-3" />
                                         </tr>
@@ -244,11 +267,11 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                                                 <td className="px-4 py-2 text-right">
                                                     {job.is_paid ? (
                                                         <span className="text-green-600">
-                                                            Paid
+                                                            {t('jobs.paid')}
                                                         </span>
                                                     ) : (
                                                         <span className="text-amber-600">
-                                                            Unpaid
+                                                            {t('jobs.unpaid')}
                                                         </span>
                                                     )}
                                                 </td>
@@ -261,7 +284,7 @@ export default function JobsIndex({ jobs, employees, filters }: Props) {
                                                         <Link
                                                             href={`/jobs/${job.id}`}
                                                         >
-                                                            View
+                                                            {t('common.view')}
                                                         </Link>
                                                     </Button>
                                                 </td>

@@ -13,23 +13,34 @@ class Employee extends Model
 
     protected $fillable = [
         'company_id',
+        'user_id',
         'name',
         'email',
         'phone',
         'role',
         'join_date',
+        'invitation_token',
+        'invitation_sent_at',
+        'invitation_accepted_at',
     ];
 
     protected function casts(): array
     {
         return [
             'join_date' => 'date',
+            'invitation_sent_at' => 'datetime',
+            'invitation_accepted_at' => 'datetime',
         ];
     }
 
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function jobs(): HasMany
