@@ -29,4 +29,5 @@ return [
     'footer_account' => 'Rek. nr.',
     'no_number' => '—',
     'job_line' => 'Opdracht #:id',
+    'standalone_line' => 'Diensten',
 ];

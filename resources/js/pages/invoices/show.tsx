@@ -17,6 +17,7 @@ type InvoiceData = {
     invoice_number?: string | null;
     recipient_name: string;
     recipient_email: string;
+    recipient_vat_number?: string | null;
     amount: number;
     subtotal?: number;
     tax_amount?: number;
@@ -45,7 +46,8 @@ type JobData = {
 type Props = {
     invoice: InvoiceData;
     invoice_lines?: InvoiceLine[];
-    job: JobData;
+    job: JobData | null;
+    standalone?: boolean;
     customer: InvoiceDocumentCustomer | null;
     company_name: string;
     company?: InvoiceCompanyDetails | null;
@@ -57,12 +59,14 @@ type Props = {
     display_invoice_number?: string | null;
     tax_rate_percent?: number;
     customer_address_lines?: string[];
+    bill_to_vat_number?: string | null;
 };
 
 export default function InvoicesShow({
     invoice,
     invoice_lines,
     job,
+    standalone = false,
     customer,
     company_name,
     company,
@@ -74,14 +78,31 @@ export default function InvoicesShow({
     display_invoice_number,
     tax_rate_percent,
     customer_address_lines,
+    bill_to_vat_number,
 }: Props) {
     const { t } = useTranslation();
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: t('jobs.title'), href: '/jobs' },
-        { title: `${t('jobs.title')} #${job.id}`, href: `/jobs/${job.id}` },
-        { title: `${t('invoices.invoice')} #${invoice.id}`, href: `/invoices/${invoice.id}` },
-    ];
+    const isStandalone = standalone || !job;
+
+    const breadcrumbs: BreadcrumbItem[] = isStandalone
+        ? [
+              { title: t('nav.invoices'), href: '/invoices' },
+              {
+                  title: `${t('invoices.invoice')} #${invoice.id}`,
+                  href: `/invoices/${invoice.id}`,
+              },
+          ]
+        : [
+              { title: t('nav.invoices'), href: '/invoices' },
+              {
+                  title: `${t('jobs.title')} #${job!.id}`,
+                  href: `/jobs/${job!.id}`,
+              },
+              {
+                  title: `${t('invoices.invoice')} #${invoice.id}`,
+                  href: `/invoices/${invoice.id}`,
+              },
+          ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -89,9 +110,13 @@ export default function InvoicesShow({
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                     <Button variant="outline" size="sm" asChild>
-                        <Link href={`/jobs/${job.id}`}>
+                        <Link
+                            href={isStandalone ? '/invoices' : `/jobs/${job!.id}`}
+                        >
                             <ArrowLeft className="size-4" />
-                            {t('jobs.backToJob')}
+                            {isStandalone
+                                ? t('invoices.backToInvoices')
+                                : t('jobs.backToJob')}
                         </Link>
                     </Button>
                     <Button
@@ -120,6 +145,7 @@ export default function InvoicesShow({
                         display_invoice_number={display_invoice_number}
                         tax_rate_percent={tax_rate_percent}
                         customer_address_lines={customer_address_lines}
+                        bill_to_vat_number={bill_to_vat_number}
                     />
                 </div>
             </div>

@@ -4,6 +4,7 @@ import {
     BookOpen,
     Briefcase,
     Calendar,
+    FileText,
     Folder,
     LayoutGrid,
     MapPin,
@@ -53,6 +54,11 @@ export function AppSidebar() {
             title: t('nav.jobs'),
             href: '/jobs',
             icon: Briefcase,
+        },
+        {
+            title: t('nav.invoices'),
+            href: '/invoices',
+            icon: FileText,
         },
         {
             title: t('nav.calendar'),

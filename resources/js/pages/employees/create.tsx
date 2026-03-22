@@ -30,7 +30,12 @@ export default function EmployeesCreate() {
         name: '',
         email: '',
         phone: '',
+        street: '',
+        house_number: '',
+        zip_code: '',
+        city: '',
         kvk_number: '',
+        vat_number: '',
         role: 'employee' as 'employee' | 'admin',
         join_date: new Date().toISOString().slice(0, 10),
         create_account: false,
@@ -40,7 +45,7 @@ export default function EmployeesCreate() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={t('employees.createEmployeeTitle')} />
             <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4">
-                <Card className="max-w-md">
+                <Card className="max-w-2xl">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <UserPlus className="size-5" />
@@ -98,6 +103,78 @@ export default function EmployeesCreate() {
                                 />
                                 <InputError message={form.errors.phone} />
                             </div>
+                            <p className="text-muted-foreground text-sm font-medium">
+                                {t('companies.sectionAddress')} (
+                                {t('common.optional')})
+                            </p>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid gap-2 sm:col-span-2">
+                                    <Label htmlFor="street">
+                                        {t('addressSearch.street')}
+                                    </Label>
+                                    <Input
+                                        id="street"
+                                        value={form.data.street}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'street',
+                                                e.target.value,
+                                            )
+                                        }
+                                        autoComplete="street-address"
+                                    />
+                                    <InputError message={form.errors.street} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="house_number">
+                                        {t('addressSearch.houseNumber')}
+                                    </Label>
+                                    <Input
+                                        id="house_number"
+                                        value={form.data.house_number}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'house_number',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                    <InputError
+                                        message={form.errors.house_number}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="zip_code">
+                                        {t('companies.postalCode')}
+                                    </Label>
+                                    <Input
+                                        id="zip_code"
+                                        value={form.data.zip_code}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'zip_code',
+                                                e.target.value,
+                                            )
+                                        }
+                                        autoComplete="postal-code"
+                                    />
+                                    <InputError message={form.errors.zip_code} />
+                                </div>
+                                <div className="grid gap-2 sm:col-span-2">
+                                    <Label htmlFor="city">
+                                        {t('companies.city')}
+                                    </Label>
+                                    <Input
+                                        id="city"
+                                        value={form.data.city}
+                                        onChange={(e) =>
+                                            form.setData('city', e.target.value)
+                                        }
+                                        autoComplete="address-level2"
+                                    />
+                                    <InputError message={form.errors.city} />
+                                </div>
+                            </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="kvk_number">
                                     {t('companies.kvkNumber')}
@@ -115,6 +192,25 @@ export default function EmployeesCreate() {
                                     autoComplete="off"
                                 />
                                 <InputError message={form.errors.kvk_number} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="vat_number">
+                                    {t('companies.taxNumber')} (
+                                    {t('common.optional')})
+                                </Label>
+                                <Input
+                                    id="vat_number"
+                                    type="text"
+                                    value={form.data.vat_number}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'vat_number',
+                                            e.target.value,
+                                        )
+                                    }
+                                    autoComplete="off"
+                                />
+                                <InputError message={form.errors.vat_number} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="role">{t('employees.role')}</Label>

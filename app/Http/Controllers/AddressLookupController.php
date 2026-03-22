@@ -155,6 +155,7 @@ class AddressLookupController extends Controller
                 'city' => $c->city,
                 'zip_code' => $c->zip_code,
                 'house_number' => $c->house_number,
+                'vat_number' => $c->vat_number,
             ]),
         ]);
     }

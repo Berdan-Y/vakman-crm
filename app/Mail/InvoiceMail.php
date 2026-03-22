@@ -62,7 +62,15 @@ class InvoiceMail extends Mailable implements ShouldQueue
     private function generatePdfContent(): string
     {
         $invoice = $this->invoice;
-        $invoice->load('job.customer', 'job.company', 'lines');
+        $invoice->loadMissing([
+            'company',
+            'job.customer',
+            'job.employee',
+            'job.company',
+            'billingCustomer',
+            'billingEmployee',
+            'lines',
+        ]);
 
         return Pdf::loadView('invoices.pdf', InvoicePdfViewData::make($invoice))
             ->setBasePath(public_path())

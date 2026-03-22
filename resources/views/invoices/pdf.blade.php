@@ -133,6 +133,7 @@
     $refDisplay = $display_invoice_number ?? $invoice['invoice_number'] ?? null;
     $factuurNr = $refDisplay !== null && $refDisplay !== '' ? $refDisplay : __('invoice_pdf.no_number');
     $baseForVat = $showTaxBlock ? $euro((float) $subtotal) : '';
+    $jobAttached = $job_attached ?? true;
 @endphp
 <div class="doc">
     <h1 class="title">{{ __('invoice_pdf.title') }}</h1>
@@ -148,6 +149,9 @@
                 @foreach($customer_address_lines as $line)
                     <p class="klant-line">{{ $line }}</p>
                 @endforeach
+                @if(!empty($bill_to_vat_number))
+                    <p class="klant-line">{{ __('invoice_pdf.vat_id') }}: {{ $bill_to_vat_number }}</p>
+                @endif
             </td>
             <td class="col-right">
                 <table class="meta-table">
@@ -206,9 +210,13 @@
             @else
                 <tr>
                     <td class="desc">
-                        {{ __('invoice_pdf.job_line', ['id' => $job['id']]) }}
-                        @if(!empty($job['description']))
-                            <span style="display:block;color:#6b7280;font-size:9px;margin-top:2px;">{{ $job['description'] }}</span>
+                        @if($jobAttached)
+                            {{ __('invoice_pdf.job_line', ['id' => $job['id']]) }}
+                            @if(!empty($job['description']))
+                                <span style="display:block;color:#6b7280;font-size:9px;margin-top:2px;">{{ $job['description'] }}</span>
+                            @endif
+                        @else
+                            {{ __('invoice_pdf.standalone_line') }}
                         @endif
                     </td>
                     <td class="num">

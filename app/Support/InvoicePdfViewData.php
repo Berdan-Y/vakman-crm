@@ -3,8 +3,8 @@
 namespace App\Support;
 
 use App\Models\Company;
-use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\Job;
 use Carbon\CarbonInterface;
 
 final class InvoicePdfViewData
@@ -14,11 +14,21 @@ final class InvoicePdfViewData
      */
     public static function make(Invoice $invoice): array
     {
-        $invoice->loadMissing('job.customer', 'job.company', 'lines');
+        $invoice->loadMissing([
+            'company',
+            'job.customer',
+            'job.employee',
+            'job.company',
+            'billingCustomer',
+            'billingEmployee',
+            'lines',
+        ]);
 
-        $company = $invoice->job->company;
         $job = $invoice->job;
-        $customer = $invoice->job->customer;
+        $company = $invoice->company ?? $job?->company;
+        if (! $company instanceof Company) {
+            throw new \RuntimeException('Invoice is missing company.');
+        }
 
         $documentAt = $invoice->sent_at ?? $invoice->created_at;
         $documentCarbon = $documentAt instanceof CarbonInterface
@@ -26,9 +36,9 @@ final class InvoicePdfViewData
             : \Carbon\Carbon::parse($documentAt);
 
         $dueCarbon = $documentCarbon->copy()->addDays(14);
-        $deliveryCarbon = $job->date instanceof CarbonInterface
-            ? $job->date->copy()
-            : \Carbon\Carbon::parse($job->date);
+        $deliveryCarbon = $job?->date
+            ? ($job->date instanceof CarbonInterface ? $job->date->copy() : \Carbon\Carbon::parse($job->date))
+            : $documentCarbon->copy();
 
         $ref = $invoice->invoice_number;
 
@@ -56,6 +66,7 @@ final class InvoicePdfViewData
             'invoice_number' => $invoice->invoice_number,
             'recipient_name' => $invoice->recipient_name,
             'recipient_email' => $invoice->recipient_email,
+            'recipient_vat_number' => $invoice->recipient_vat_number,
             'amount' => (float) $invoice->amount,
             'subtotal' => $subtotal,
             'tax_amount' => $taxAmount,
@@ -73,29 +84,28 @@ final class InvoicePdfViewData
             'total' => (float) $line->total,
         ])->values()->all();
 
-        $scheduledTime = $job->scheduled_time
+        $scheduledTime = $job && $job->scheduled_time
             ? (is_string($job->scheduled_time)
                 ? substr($job->scheduled_time, 0, 5)
                 : $job->scheduled_time->format('H:i'))
             : null;
 
-        $jobData = [
+        $jobData = $job ? [
             'id' => $job->id,
             'description' => $job->description,
             'date' => $job->date->format('Y-m-d'),
             'scheduled_time' => $scheduledTime,
             'invoice_number' => $ref ?? $job->invoice_number,
+        ] : [
+            'id' => 0,
+            'description' => null,
+            'date' => $documentCarbon->format('Y-m-d'),
+            'scheduled_time' => null,
+            'invoice_number' => null,
         ];
 
-        $customerData = $customer ? [
-            'name' => $customer->name,
-            'email' => $customer->email,
-            'phone' => $customer->phone,
-            'street' => $customer->street,
-            'house_number' => $customer->house_number,
-            'zip_code' => $customer->zip_code,
-            'city' => $customer->city,
-        ] : null;
+        $customerData = self::billToPartyPayload($invoice, $job);
+        $billToVat = self::billToVatNumber($invoice, $job);
 
         $companyData = [
             'name' => $company->name,
@@ -115,7 +125,9 @@ final class InvoicePdfViewData
             'invoice' => $invoiceData,
             'invoice_lines' => $invoiceLines,
             'job' => $jobData,
+            'job_attached' => $job !== null,
             'customer' => $customerData,
+            'bill_to_vat_number' => $billToVat,
             'company' => $companyData,
             'company_name' => $company->name,
             'company_sender_line' => $companySenderLine,
@@ -125,7 +137,7 @@ final class InvoicePdfViewData
             'payment_method_label' => __("invoice_pdf.{$paymentKey}"),
             'display_invoice_number' => $ref,
             'tax_rate_percent' => $taxRatePercent,
-            'customer_address_lines' => self::customerAddressLines($customer, $invoice),
+            'customer_address_lines' => self::customerAddressLines($invoice, $job),
         ];
     }
 
@@ -142,13 +154,126 @@ final class InvoicePdfViewData
     }
 
     /**
+     * @return array<string, mixed>|null
+     */
+    private static function billToPartyPayload(Invoice $invoice, ?Job $job): ?array
+    {
+        if ($invoice->type === Invoice::TYPE_CUSTOMER && $job?->customer) {
+            $c = $job->customer;
+
+            return [
+                'name' => $c->name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'street' => $c->street,
+                'house_number' => $c->house_number,
+                'zip_code' => $c->zip_code,
+                'city' => $c->city,
+            ];
+        }
+
+        if ($invoice->type === Invoice::TYPE_EMPLOYEE && $job?->employee) {
+            $e = $job->employee;
+
+            return [
+                'name' => $e->name,
+                'email' => $e->email,
+                'phone' => $e->phone,
+                'street' => $e->street,
+                'house_number' => $e->house_number,
+                'zip_code' => $e->zip_code,
+                'city' => $e->city,
+            ];
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_CUSTOMER && $invoice->billingCustomer) {
+            $c = $invoice->billingCustomer;
+
+            return [
+                'name' => $c->name,
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'street' => $c->street,
+                'house_number' => $c->house_number,
+                'zip_code' => $c->zip_code,
+                'city' => $c->city,
+            ];
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_EMPLOYEE && $invoice->billingEmployee) {
+            $e = $invoice->billingEmployee;
+
+            return [
+                'name' => $e->name,
+                'email' => $e->email,
+                'phone' => $e->phone,
+                'street' => $e->street,
+                'house_number' => $e->house_number,
+                'zip_code' => $e->zip_code,
+                'city' => $e->city,
+            ];
+        }
+
+        return null;
+    }
+
+    private static function billToVatNumber(Invoice $invoice, ?Job $job): ?string
+    {
+        if ($invoice->type === Invoice::TYPE_CUSTOMER && $job?->customer?->vat_number) {
+            return $job->customer->vat_number;
+        }
+
+        if ($invoice->type === Invoice::TYPE_EMPLOYEE && $job?->employee?->vat_number) {
+            return $job->employee->vat_number;
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_CUSTOMER && $invoice->billingCustomer?->vat_number) {
+            return $invoice->billingCustomer->vat_number;
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_EMPLOYEE && $invoice->billingEmployee?->vat_number) {
+            return $invoice->billingEmployee->vat_number;
+        }
+
+        return filled($invoice->recipient_vat_number) ? $invoice->recipient_vat_number : null;
+    }
+
+    /**
      * @return array<int, string>
      */
-    private static function customerAddressLines(?Customer $customer, Invoice $invoice): array
+    private static function customerAddressLines(Invoice $invoice, ?Job $job): array
     {
-        if ($customer) {
-            $street = trim(($customer->street ?? '').' '.($customer->house_number ?? ''));
-            $line2 = trim(implode(' ', array_filter([$customer->zip_code, $customer->city])));
+        if ($invoice->type === Invoice::TYPE_CUSTOMER && $job?->customer) {
+            $c = $job->customer;
+            $street = trim(($c->street ?? '').' '.($c->house_number ?? ''));
+            $line2 = trim(implode(' ', array_filter([$c->zip_code, $c->city])));
+            $lines = array_values(array_filter([$street, $line2]));
+
+            return $lines !== [] ? $lines : [$invoice->recipient_name];
+        }
+
+        if ($invoice->type === Invoice::TYPE_EMPLOYEE && $job?->employee) {
+            $e = $job->employee;
+            $street = trim(($e->street ?? '').' '.($e->house_number ?? ''));
+            $line2 = trim(implode(' ', array_filter([$e->zip_code, $e->city])));
+            $lines = array_values(array_filter([$street, $line2]));
+
+            return $lines !== [] ? $lines : [$invoice->recipient_name];
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_CUSTOMER && $invoice->billingCustomer) {
+            $c = $invoice->billingCustomer;
+            $street = trim(($c->street ?? '').' '.($c->house_number ?? ''));
+            $line2 = trim(implode(' ', array_filter([$c->zip_code, $c->city])));
+            $lines = array_values(array_filter([$street, $line2]));
+
+            return $lines !== [] ? $lines : [$invoice->recipient_name];
+        }
+
+        if ($job === null && $invoice->type === Invoice::TYPE_EMPLOYEE && $invoice->billingEmployee) {
+            $e = $invoice->billingEmployee;
+            $street = trim(($e->street ?? '').' '.($e->house_number ?? ''));
+            $line2 = trim(implode(' ', array_filter([$e->zip_code, $e->city])));
             $lines = array_values(array_filter([$street, $line2]));
 
             return $lines !== [] ? $lines : [$invoice->recipient_name];

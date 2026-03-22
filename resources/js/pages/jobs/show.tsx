@@ -1,5 +1,5 @@
-import { Head, router, usePage } from '@inertiajs/react';
-import { useCallback, useEffect, useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import {
@@ -121,9 +121,17 @@ type JobDetail = {
     whatsapp_sent_at: string | null;
 };
 
+type InvoiceParty = {
+    id: number;
+    name: string;
+    email: string | null;
+};
+
 type Props = {
     job: JobDetail;
     jobOptions?: JobOptions;
+    customersForInvoice?: InvoiceParty[];
+    employeesForInvoice?: InvoiceParty[];
 };
 
 const defaultJobOptions: JobOptions = {
@@ -151,6 +159,8 @@ function getCsrfToken(): string {
 export default function JobsShow({
     job,
     jobOptions = defaultJobOptions,
+    customersForInvoice = [],
+    employeesForInvoice = [],
 }: Props) {
     const { auth } = usePage().props as any;
     const userRole = auth?.currentCompany?.role;
@@ -167,6 +177,8 @@ export default function JobsShow({
     );
     const [recipientName, setRecipientName] = useState('');
     const [recipientEmail, setRecipientEmail] = useState('');
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
     const [invoiceLines, setInvoiceLines] = useState<InvoiceLineLocal[]>([]);
     const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
     const [whatsAppSending, setWhatsAppSending] = useState(false);
@@ -197,7 +209,7 @@ export default function JobsShow({
             date: string;
             scheduled_time: string | null;
             invoice_number: string | null;
-        };
+        } | null;
         customer: InvoiceDocumentCustomer | null;
         company_name: string;
         company?: InvoiceCompanyDetails | null;
@@ -218,11 +230,36 @@ export default function JobsShow({
     const [jobDeleteConfirmOpen, setJobDeleteConfirmOpen] = useState(false);
     const [priceIncludesTax, setPriceIncludesTax] = useState(false);
 
+    const invoiceStepOneValid = useMemo(() => {
+        if (invoiceType === 'customer') {
+            const c = customersForInvoice.find(
+                (x) => String(x.id) === selectedCustomerId,
+            );
+            return !!(c && c.email?.trim());
+        }
+        const e = employeesForInvoice.find(
+            (x) => String(x.id) === selectedEmployeeId,
+        );
+        return !!(e && e.email?.trim());
+    }, [
+        invoiceType,
+        customersForInvoice,
+        employeesForInvoice,
+        selectedCustomerId,
+        selectedEmployeeId,
+    ]);
+
     const openCreateInvoice = () => {
         setIsEditMode(false);
         setEditingInvoiceId(null);
         setInvoiceStep(1);
         setInvoiceType('customer');
+        setSelectedCustomerId(
+            job.customer ? String(job.customer.id) : '',
+        );
+        setSelectedEmployeeId(
+            job.employee ? String(job.employee.id) : '',
+        );
         setRecipientName(job.customer?.name ?? '');
         setRecipientEmail(job.customer?.email ?? '');
         setInvoiceLines([
@@ -237,6 +274,19 @@ export default function JobsShow({
         setPaymentMethod('card');
         setInvoiceOpen(true);
     };
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('newInvoice') !== '1') {
+            return;
+        }
+        openCreateInvoice();
+        params.delete('newInvoice');
+        const qs = params.toString();
+        const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+        window.history.replaceState({}, '', url);
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per navigation; job is current
+    }, [job.id]);
 
     const openEditInvoice = useCallback((invId: number) => {
         setInvoicePreviewLoading(true);
@@ -254,6 +304,24 @@ export default function JobsShow({
                 );
                 setRecipientName(data.invoice.recipient_name);
                 setRecipientEmail(data.invoice.recipient_email);
+                if (data.invoice.type === 'customer') {
+                    const match = customersForInvoice.find(
+                        (c) =>
+                            c.name === data.invoice.recipient_name &&
+                            (c.email ?? '') ===
+                                (data.invoice.recipient_email ?? ''),
+                    );
+                    setSelectedCustomerId(match ? String(match.id) : '');
+                    setSelectedEmployeeId('');
+                } else {
+                    const match = employeesForInvoice.find(
+                        (e) =>
+                            e.name === data.invoice.recipient_name &&
+                            e.email === data.invoice.recipient_email,
+                    );
+                    setSelectedEmployeeId(match ? String(match.id) : '');
+                    setSelectedCustomerId('');
+                }
                 setInvoiceLines(
                     (data.invoice_lines || []).map((line: InvoiceLineAPI) => ({
                         id: String(line.id),
@@ -269,7 +337,7 @@ export default function JobsShow({
                 alert(t('invoices.failedToLoadInvoiceData'));
             })
             .finally(() => setInvoicePreviewLoading(false));
-    }, []);
+    }, [customersForInvoice, employeesForInvoice, t]);
 
     const openDeleteConfirm = (invId: number) => {
         setInvoiceToDelete(invId);
@@ -287,9 +355,17 @@ export default function JobsShow({
     const onInvoiceTypeChange = (type: 'customer' | 'employee') => {
         setInvoiceType(type);
         if (type === 'customer') {
+            setSelectedCustomerId(
+                job.customer ? String(job.customer.id) : '',
+            );
+            setSelectedEmployeeId('');
             setRecipientName(job.customer?.name ?? '');
             setRecipientEmail(job.customer?.email ?? '');
         } else {
+            setSelectedEmployeeId(
+                job.employee ? String(job.employee.id) : '',
+            );
+            setSelectedCustomerId('');
             setRecipientName(job.employee?.name ?? '');
             setRecipientEmail(job.employee?.email ?? '');
         }
@@ -791,35 +867,194 @@ export default function JobsShow({
                                                               )}
                                                     </p>
                                                 </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="inv-recipient-name">
-                                                        {t('invoices.recipientName')}
-                                                    </Label>
-                                                    <Input
-                                                        id="inv-recipient-name"
-                                                        value={recipientName}
-                                                        onChange={(e) =>
-                                                            setRecipientName(
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                                <div className="grid gap-2">
-                                                    <Label htmlFor="inv-recipient-email">
-                                                        {t('invoices.recipientEmail')}
-                                                    </Label>
-                                                    <Input
-                                                        id="inv-recipient-email"
-                                                        type="email"
-                                                        value={recipientEmail}
-                                                        onChange={(e) =>
-                                                            setRecipientEmail(
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
+                                                {invoiceType === 'customer' ? (
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="inv-job-customer">
+                                                            {t('invoices.selectCustomer')}
+                                                        </Label>
+                                                        <Select
+                                                            value={
+                                                                selectedCustomerId ||
+                                                                undefined
+                                                            }
+                                                            onValueChange={(
+                                                                id,
+                                                            ) => {
+                                                                setSelectedCustomerId(
+                                                                    id,
+                                                                );
+                                                                const c =
+                                                                    customersForInvoice.find(
+                                                                        (x) =>
+                                                                            String(
+                                                                                x.id,
+                                                                            ) ===
+                                                                            id,
+                                                                    );
+                                                                if (c) {
+                                                                    setRecipientName(
+                                                                        c.name,
+                                                                    );
+                                                                    setRecipientEmail(
+                                                                        c.email ??
+                                                                            '',
+                                                                    );
+                                                                }
+                                                            }}
+                                                        >
+                                                            <SelectTrigger id="inv-job-customer">
+                                                                <SelectValue
+                                                                    placeholder={t(
+                                                                        'invoices.chooseCustomer',
+                                                                    )}
+                                                                />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {customersForInvoice.map(
+                                                                    (c) => (
+                                                                        <SelectItem
+                                                                            key={
+                                                                                c.id
+                                                                            }
+                                                                            value={String(
+                                                                                c.id,
+                                                                            )}
+                                                                        >
+                                                                            {
+                                                                                c.name
+                                                                            }
+                                                                            {c.email
+                                                                                ? ` · ${c.email}`
+                                                                                : ''}
+                                                                        </SelectItem>
+                                                                    ),
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {customersForInvoice.length ===
+                                                        0 ? (
+                                                            <p className="text-muted-foreground text-sm">
+                                                                {t(
+                                                                    'invoices.noCustomersForInvoice',
+                                                                )}{' '}
+                                                                <Link
+                                                                    href="/address-search"
+                                                                    className="text-primary underline"
+                                                                >
+                                                                    {t(
+                                                                        'addressSearch.title',
+                                                                    )}
+                                                                </Link>
+                                                            </p>
+                                                        ) : null}
+                                                        {selectedCustomerId &&
+                                                        !customersForInvoice.find(
+                                                            (x) =>
+                                                                String(x.id) ===
+                                                                selectedCustomerId,
+                                                        )?.email?.trim() ? (
+                                                            <p className="text-destructive text-sm">
+                                                                {t(
+                                                                    'invoices.recipientNeedsEmail',
+                                                                )}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-2">
+                                                        <Label htmlFor="inv-job-employee">
+                                                            {t('invoices.selectEmployee')}
+                                                        </Label>
+                                                        <Select
+                                                            value={
+                                                                selectedEmployeeId ||
+                                                                undefined
+                                                            }
+                                                            onValueChange={(
+                                                                id,
+                                                            ) => {
+                                                                setSelectedEmployeeId(
+                                                                    id,
+                                                                );
+                                                                const e =
+                                                                    employeesForInvoice.find(
+                                                                        (x) =>
+                                                                            String(
+                                                                                x.id,
+                                                                            ) ===
+                                                                            id,
+                                                                    );
+                                                                if (e) {
+                                                                    setRecipientName(
+                                                                        e.name,
+                                                                    );
+                                                                    setRecipientEmail(
+                                                                        e.email ??
+                                                                            '',
+                                                                    );
+                                                                }
+                                                            }}
+                                                        >
+                                                            <SelectTrigger id="inv-job-employee">
+                                                                <SelectValue
+                                                                    placeholder={t(
+                                                                        'invoices.chooseEmployee',
+                                                                    )}
+                                                                />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {employeesForInvoice.map(
+                                                                    (e) => (
+                                                                        <SelectItem
+                                                                            key={
+                                                                                e.id
+                                                                            }
+                                                                            value={String(
+                                                                                e.id,
+                                                                            )}
+                                                                        >
+                                                                            {
+                                                                                e.name
+                                                                            }{' '}
+                                                                            ·{' '}
+                                                                            {
+                                                                                e.email
+                                                                            }
+                                                                        </SelectItem>
+                                                                    ),
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        {employeesForInvoice.length ===
+                                                        0 ? (
+                                                            <p className="text-muted-foreground text-sm">
+                                                                {t(
+                                                                    'invoices.noEmployeesForInvoice',
+                                                                )}{' '}
+                                                                <Link
+                                                                    href="/employees/create"
+                                                                    className="text-primary underline"
+                                                                >
+                                                                    {t(
+                                                                        'employees.addEmployee',
+                                                                    )}
+                                                                </Link>
+                                                            </p>
+                                                        ) : null}
+                                                        {selectedEmployeeId &&
+                                                        !employeesForInvoice.find(
+                                                            (x) =>
+                                                                String(x.id) ===
+                                                                selectedEmployeeId,
+                                                        )?.email?.trim() ? (
+                                                            <p className="text-destructive text-sm">
+                                                                {t(
+                                                                    'invoices.recipientNeedsEmail',
+                                                                )}
+                                                            </p>
+                                                        ) : null}
+                                                    </div>
+                                                )}
                                             </div>
                                             <DialogFooter>
                                                 <Button
@@ -836,10 +1071,7 @@ export default function JobsShow({
                                                     onClick={() =>
                                                         setInvoiceStep(2)
                                                     }
-                                                    disabled={
-                                                        !recipientName.trim() ||
-                                                        !recipientEmail.trim()
-                                                    }
+                                                    disabled={!invoiceStepOneValid}
                                                 >
                                                     {t('invoices.nextAddLineItems')}
                                                     <ChevronRight className="ml-1 size-4" />

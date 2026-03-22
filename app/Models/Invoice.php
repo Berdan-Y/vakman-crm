@@ -27,12 +27,16 @@ class Invoice extends Model
     public const PAYMENT_CASH = 'cash';
 
     protected $fillable = [
+        'company_id',
         'crm_job_id',
         'type',
         'payment_method',
         'invoice_number',
         'recipient_email',
         'recipient_name',
+        'recipient_vat_number',
+        'billing_customer_id',
+        'billing_employee_id',
         'amount',
         'subtotal',
         'tax_amount',
@@ -52,9 +56,24 @@ class Invoice extends Model
         ];
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class, 'crm_job_id');
+    }
+
+    public function billingCustomer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'billing_customer_id');
+    }
+
+    public function billingEmployee(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'billing_employee_id');
     }
 
     public function lines(): HasMany
@@ -69,12 +88,12 @@ class Invoice extends Model
     public static function generateNextReferenceNumber(self $invoice, CarbonInterface $sentAt): string
     {
         $invoice->loadMissing('job');
-        $companyId = (int) $invoice->job->company_id;
+        $companyId = (int) ($invoice->company_id ?? $invoice->job?->company_id);
         $date = $sentAt->copy()->startOfDay();
         $prefix = 'INV-'.$date->format('Ymd').'-';
 
         $query = self::query()
-            ->whereHas('job', fn ($q) => $q->where('company_id', $companyId))
+            ->where('company_id', $companyId)
             ->whereDate('sent_at', $date->toDateString())
             ->where('payment_method', self::PAYMENT_CARD)
             ->whereNotNull('invoice_number')

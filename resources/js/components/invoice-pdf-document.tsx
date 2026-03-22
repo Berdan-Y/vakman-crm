@@ -40,6 +40,7 @@ type Invoice = {
     invoice_number?: string | null;
     recipient_name: string;
     recipient_email: string;
+    recipient_vat_number?: string | null;
     amount: number;
     subtotal?: number;
     tax_amount?: number;
@@ -60,7 +61,7 @@ type Job = {
 type Props = {
     invoice: Invoice;
     invoice_lines?: InvoiceLine[];
-    job: Job;
+    job: Job | null;
     customer: InvoiceDocumentCustomer | null;
     company_name: string;
     company?: InvoiceCompanyDetails | null;
@@ -72,6 +73,8 @@ type Props = {
     display_invoice_number?: string | null;
     tax_rate_percent?: number;
     customer_address_lines?: string[];
+    /** VAT / BTW number shown under the address (from customer, employee, or invoice). */
+    bill_to_vat_number?: string | null;
     className?: string;
 };
 
@@ -111,6 +114,7 @@ export function InvoicePdfDocument({
     display_invoice_number,
     tax_rate_percent = 21,
     customer_address_lines: customerAddressLinesProp,
+    bill_to_vat_number: billToVatNumberProp,
     className,
 }: Props) {
     const { t } = useTranslation();
@@ -126,6 +130,9 @@ export function InvoicePdfDocument({
     const customerAddressLines =
         customerAddressLinesProp ??
         (addressLineLegacy ? [addressLineLegacy] : []);
+
+    const billToVatNumber =
+        billToVatNumberProp ?? invoice.recipient_vat_number ?? null;
 
     const docDate =
         document_date ??
@@ -147,7 +154,7 @@ export function InvoicePdfDocument({
             }
         })();
     const deliveryDate =
-        delivery_date ?? (job.date ? formatDateNl(job.date) : docDate);
+        delivery_date ?? (job?.date ? formatDateNl(job.date) : docDate);
 
     const paymentLabel =
         payment_method_label ??
@@ -156,7 +163,10 @@ export function InvoicePdfDocument({
             : t('invoices.paymentCard'));
 
     const refNumber =
-        display_invoice_number ?? invoice.invoice_number ?? job.invoice_number;
+        display_invoice_number ??
+        invoice.invoice_number ??
+        job?.invoice_number ??
+        null;
     const factuurNr =
         refNumber !== null && refNumber !== ''
             ? refNumber
@@ -262,6 +272,11 @@ export function InvoicePdfDocument({
                             {line}
                         </p>
                     ))}
+                    {billToVatNumber ? (
+                        <p className="text-[11px] text-gray-700">
+                            {t('companies.taxNumber')}: {billToVatNumber}
+                        </p>
+                    ) : null}
                 </div>
                 <div className="min-w-[220px] flex-1">
                     <table className="w-full font-sans text-[11px]">
@@ -371,22 +386,38 @@ export function InvoicePdfDocument({
                     ) : (
                         <tr>
                             <td className="border-b border-gray-200 px-1.5 py-2.5 align-top">
-                                <span>
-                                    {t('invoices.pdfJobLine', { id: job.id })}
-                                </span>
-                                {job.description ? (
-                                    <span className="mt-0.5 block text-[9px] text-gray-500">
-                                        {job.description}
+                                {job ? (
+                                    <>
+                                        <span>
+                                            {t('invoices.pdfJobLine', {
+                                                id: job.id,
+                                            })}
+                                        </span>
+                                        {job.description ? (
+                                            <span className="mt-0.5 block text-[9px] text-gray-500">
+                                                {job.description}
+                                            </span>
+                                        ) : null}
+                                    </>
+                                ) : (
+                                    <span>
+                                        {t('invoices.pdfStandaloneLine')}
                                     </span>
-                                ) : null}
+                                )}
                             </td>
                             <td className="border-b border-gray-200 px-1.5 py-2.5 text-center align-top">
-                                {formatDateNl(job.date)}
-                                {job.scheduled_time ? (
-                                    <span className="mt-0.5 block text-[9px] text-gray-500">
-                                        {job.scheduled_time}
-                                    </span>
-                                ) : null}
+                                {job ? (
+                                    <>
+                                        {formatDateNl(job.date)}
+                                        {job.scheduled_time ? (
+                                            <span className="mt-0.5 block text-[9px] text-gray-500">
+                                                {job.scheduled_time}
+                                            </span>
+                                        ) : null}
+                                    </>
+                                ) : (
+                                    docDate
+                                )}
                             </td>
                             <td className="border-b border-gray-200 px-1.5 py-2.5 text-right font-bold align-top">
                                 {formatCurrency(invoice.amount)}

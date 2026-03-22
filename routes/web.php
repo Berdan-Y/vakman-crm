@@ -61,6 +61,9 @@ Route::middleware(['auth', 'verified', 'company'])->group(function () {
     Route::delete('jobs/{job}', [JobController::class, 'destroy'])->name('jobs.destroy');
     Route::post('jobs/{job}/mark-paid', [JobController::class, 'markPaid'])->name('jobs.mark-paid');
     Route::post('jobs/{job}/send-whatsapp', [JobController::class, 'sendWhatsApp'])->name('jobs.send-whatsapp');
+    Route::get('invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+    Route::get('invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+    Route::get('invoices/new', [InvoiceController::class, 'newInvoice'])->name('invoices.new');
     Route::get('invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
     Route::get('invoices/{invoice}/preview', [InvoiceController::class, 'preview'])->name('invoices.preview');
     Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');

@@ -20,6 +20,7 @@ class Customer extends Model
         'house_number',
         'street',
         'city',
+        'vat_number',
     ];
 
     public function company(): BelongsTo

@@ -29,4 +29,5 @@ return [
     'footer_account' => 'Account no.',
     'no_number' => '—',
     'job_line' => 'Job #:id',
+    'standalone_line' => 'Services',
 ];

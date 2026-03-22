@@ -50,6 +50,7 @@ class CustomerController extends Controller
                 'city' => $customer->city,
                 'zip_code' => $customer->zip_code,
                 'house_number' => $customer->house_number,
+                'vat_number' => $customer->vat_number,
             ],
             'jobs' => $jobs->map(fn ($job) => [
                 'id' => $job->id,

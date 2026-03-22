@@ -46,7 +46,12 @@ type EmployeeDetail = {
     name: string;
     email: string;
     phone: string | null;
+    street: string | null;
+    house_number: string | null;
+    zip_code: string | null;
+    city: string | null;
     kvk_number: string | null;
+    vat_number: string | null;
     role: string | null;
     join_date: string | null;
     total_jobs: number;
@@ -155,6 +160,36 @@ export default function EmployeesShow({ employee }: Props) {
                                 >
                                     {employee.phone}
                                 </a>
+                            </div>
+                        )}
+                        {[
+                            employee.street,
+                            employee.house_number,
+                            employee.zip_code,
+                            employee.city,
+                        ].some(Boolean) && (
+                            <div className="col-span-full flex items-start gap-2 text-sm sm:col-span-2">
+                                <Building2 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                                <span>
+                                    {[
+                                        [employee.street, employee.house_number]
+                                            .filter(Boolean)
+                                            .join(' '),
+                                        [employee.zip_code, employee.city]
+                                            .filter(Boolean)
+                                            .join(' '),
+                                    ]
+                                        .filter(Boolean)
+                                        .join(', ')}
+                                </span>
+                            </div>
+                        )}
+                        {employee.vat_number && (
+                            <div className="col-span-full text-sm sm:col-span-2">
+                                <span className="font-medium">
+                                    {t('companies.taxNumber')}:
+                                </span>{' '}
+                                {employee.vat_number}
                             </div>
                         )}
                         {employee.kvk_number && (

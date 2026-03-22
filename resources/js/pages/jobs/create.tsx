@@ -63,6 +63,7 @@ type AddressResult = {
         name: string;
         email: string | null;
         phone: string | null;
+        vat_number?: string | null;
     }>;
 };
 
@@ -127,6 +128,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
         house_number: '',
         street: '',
         city: '',
+        vat_number: '',
         recommendation: '' as '' | 'emergency' | 'regular',
         job_info: '' as string,
         job_type_id: null as number | null,
@@ -265,6 +267,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
                             name: c.name,
                             email: c.email ?? '',
                             phone: c.phone ?? '',
+                            vat_number: c.vat_number ?? '',
                             zip_code: address.postcode,
                             house_number: fullHouseNumber,
                             street: address.street,
@@ -373,6 +376,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
                             name: c.name,
                             email: c.email ?? '',
                             phone: c.phone ?? '',
+                            vat_number: c.vat_number ?? '',
                             zip_code: address.postcode,
                             house_number: fullHouseNumber,
                             street: address.street,
@@ -415,6 +419,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
         name: string;
         email: string | null;
         phone: string | null;
+        vat_number?: string | null;
     }) => {
         setSelectedCustomerId(c.id);
         form.setData({
@@ -423,6 +428,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
             name: c.name,
             email: c.email ?? '',
             phone: c.phone ?? '',
+            vat_number: c.vat_number ?? '',
         });
     };
 
@@ -677,6 +683,25 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
                                         </div>
                                     </>
                                 )}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="vat_number">
+                                        {`${t('companies.taxNumber')} (${t('common.optional')})`}
+                                    </Label>
+                                    <Input
+                                        id="vat_number"
+                                        value={form.data.vat_number}
+                                        onChange={(e) =>
+                                            form.setData(
+                                                'vat_number',
+                                                e.target.value,
+                                            )
+                                        }
+                                        autoComplete="off"
+                                    />
+                                    <InputError
+                                        message={form.errors.vat_number}
+                                    />
+                                </div>
                                 <div className="grid gap-2">
                                     <Label>{t('jobs.recommendation')}</Label>
                                     <Select

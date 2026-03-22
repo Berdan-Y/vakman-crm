@@ -26,6 +26,7 @@ type CustomerDetail = {
     city: string | null;
     zip_code: string;
     house_number: string;
+    vat_number: string | null;
 };
 
 type Job = {
@@ -114,6 +115,14 @@ export default function CustomersShow({
                             <p className="flex items-center gap-2">
                                 <Building2 className="size-4 shrink-0 text-muted-foreground" />
                                 {addressParts.join(', ')}
+                            </p>
+                        )}
+                        {customer.vat_number && (
+                            <p className="text-muted-foreground">
+                                <span className="font-medium text-foreground">
+                                    {t('companies.taxNumber')}:
+                                </span>{' '}
+                                {customer.vat_number}
                             </p>
                         )}
                     </CardContent>

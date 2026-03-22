@@ -152,8 +152,34 @@ class JobController extends Controller
 
         $displayPrice = $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;
 
+        $customersForInvoice = Customer::query()
+            ->where('company_id', $companyId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(fn (Customer $c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'email' => $c->email,
+            ])
+            ->values()
+            ->all();
+
+        $employeesForInvoice = Employee::query()
+            ->where('company_id', $companyId)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->map(fn (Employee $e) => [
+                'id' => $e->id,
+                'name' => $e->name,
+                'email' => $e->email,
+            ])
+            ->values()
+            ->all();
+
         return Inertia::render('jobs/show', [
             'jobOptions' => $jobOptions,
+            'customersForInvoice' => $customersForInvoice,
+            'employeesForInvoice' => $employeesForInvoice,
             'job' => [
                 'id' => $job->id,
                 'description' => $job->description,
@@ -180,12 +206,18 @@ class JobController extends Controller
                     'city' => $job->customer->city,
                     'zip_code' => $job->customer->zip_code,
                     'house_number' => $job->customer->house_number,
+                    'vat_number' => $job->customer->vat_number,
                 ] : null,
                 'employee' => $job->employee ? [
                     'id' => $job->employee->id,
                     'name' => $job->employee->name,
                     'email' => $job->employee->email,
                     'phone' => $job->employee->phone,
+                    'street' => $job->employee->street,
+                    'house_number' => $job->employee->house_number,
+                    'zip_code' => $job->employee->zip_code,
+                    'city' => $job->employee->city,
+                    'vat_number' => $job->employee->vat_number,
                     'role' => $job->employee->role,
                 ] : null,
                 'invoices' => $job->invoices->map(fn ($inv) => [
@@ -245,6 +277,7 @@ class JobController extends Controller
             ],
             'job_type_other' => ['nullable', 'string', 'max:255'],
             'send_notification' => ['nullable', 'boolean'],
+            'vat_number' => ['nullable', 'string', 'max:64'],
         ]);
 
         $jobType = JobType::where('company_id', $companyId)
@@ -255,6 +288,10 @@ class JobController extends Controller
         if (! empty($validated['customer_id'])) {
             $customer = Customer::where('company_id', $companyId)
                 ->findOrFail($validated['customer_id']);
+            if (array_key_exists('vat_number', $validated)) {
+                $customer->vat_number = $validated['vat_number'] ?: null;
+                $customer->save();
+            }
         } else {
             $customer = Customer::create([
                 'company_id' => $companyId,
@@ -265,6 +302,7 @@ class JobController extends Controller
                 'house_number' => $validated['house_number'],
                 'street' => $validated['street'] ?? null,
                 'city' => $validated['city'] ?? null,
+                'vat_number' => $validated['vat_number'] ?? null,
             ]);
         }
 
@@ -346,6 +384,7 @@ class JobController extends Controller
                     'city' => $job->customer->city,
                     'zip_code' => $job->customer->zip_code,
                     'house_number' => $job->customer->house_number,
+                    'vat_number' => $job->customer->vat_number,
                 ] : null,
             ],
             'employees' => $employees,
