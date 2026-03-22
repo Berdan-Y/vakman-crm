@@ -48,6 +48,19 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
+const rightNavItems: NavItem[] = [
+    {
+        title: 'Documentation',
+        href: 'https://laravel.com/docs',
+        icon: BookOpen,
+    },
+    {
+        title: 'Repository',
+        href: 'https://github.com/laravel/laravel',
+        icon: Folder,
+    },
+];
+
 const activeItemStyles =
     'text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100';
 
