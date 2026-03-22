@@ -23,6 +23,7 @@ type EmployeeData = {
     name: string;
     email: string;
     phone: string | null;
+    kvk_number: string | null;
     role: string | null;
     join_date: string | null;
     user_id: number | null;
@@ -48,6 +49,7 @@ export default function EmployeesEdit({ employee }: Props) {
         name: employee.name,
         email: employee.email,
         phone: employee.phone || '',
+        kvk_number: employee.kvk_number || '',
         role: (employee.role?.toLowerCase() === 'admin' ? 'admin' : 'employee') as 'employee' | 'admin',
         join_date: employee.join_date || '',
     });
@@ -124,6 +126,24 @@ export default function EmployeesEdit({ employee }: Props) {
                                     autoComplete="tel"
                                 />
                                 <InputError message={form.errors.phone} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="kvk_number">
+                                    {t('companies.kvkNumber')}
+                                </Label>
+                                <Input
+                                    id="kvk_number"
+                                    type="text"
+                                    value={form.data.kvk_number}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'kvk_number',
+                                            e.target.value,
+                                        )
+                                    }
+                                    autoComplete="off"
+                                />
+                                <InputError message={form.errors.kvk_number} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="role">{t('employees.role')}</Label>

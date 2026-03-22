@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AddressLookupController;
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
@@ -30,11 +31,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('api/keep-alive', KeepAliveController::class)->name('keep-alive');
     Route::get('companies', [CompanyController::class, 'index'])->name('companies.index');
     Route::post('companies', [CompanyController::class, 'store'])->name('companies.store');
+    Route::get('companies/{company}/edit', [CompanyController::class, 'edit'])->name('companies.edit');
+    Route::patch('companies/{company}', [CompanyController::class, 'update'])->name('companies.update');
     Route::post('companies/switch', [CompanyController::class, 'switch'])->name('companies.switch');
 });
 
 Route::middleware(['auth', 'verified', 'company'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('calendar', [CalendarController::class, 'index'])->name('calendar.index');
     Route::get('address-search', [AddressLookupController::class, 'index'])->name('address-search.index');
     Route::post('address-search/autocomplete', [AddressLookupController::class, 'autocomplete'])->name('address-search.autocomplete');
     Route::post('address-search/find-customers', [AddressLookupController::class, 'findCustomers'])->name('address-search.find-customers');

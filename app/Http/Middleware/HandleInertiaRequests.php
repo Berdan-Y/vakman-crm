@@ -37,12 +37,7 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         $companies = $user
-            ? $user->companies()->orderBy('name')->get()->map(fn ($c) => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'industry' => $c->industry,
-                'role' => $c->pivot->role,
-            ])
+            ? $user->companies()->orderBy('name')->get()->map(fn ($c) => $c->toInertiaArray((string) $c->pivot->role))
             : [];
         $currentCompanyId = session('current_company_id');
         $currentCompany = $user && $currentCompanyId
@@ -53,15 +48,15 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'locale' => app()->getLocale(),
+            'flash' => [
+                'success' => $request->session()->get('success'),
+            ],
             'auth' => [
                 'user' => $user,
                 'companies' => $companies,
-                'currentCompany' => $currentCompany ? [
-                    'id' => $currentCompany->id,
-                    'name' => $currentCompany->name,
-                    'industry' => $currentCompany->industry,
-                    'role' => $currentCompany->pivot->role,
-                ] : null,
+                'currentCompany' => $currentCompany
+                    ? $currentCompany->toInertiaArray((string) $currentCompany->pivot->role)
+                    : null,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'csrf_token' => csrf_token(), // Ensure CSRF token is always fresh

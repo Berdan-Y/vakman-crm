@@ -18,6 +18,7 @@ type Employee = {
     name: string;
     email: string;
     phone: string | null;
+    kvk_number: string | null;
     role: string | null;
     join_date: string | null;
     total_jobs: number;

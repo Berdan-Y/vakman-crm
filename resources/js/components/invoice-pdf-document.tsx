@@ -11,6 +11,20 @@ export type InvoiceDocumentCustomer = {
     house_number: string;
 };
 
+export type InvoiceCompanyDetails = {
+    name: string;
+    street_address: string | null;
+    postal_code: string | null;
+    city: string | null;
+    country: string | null;
+    tax_number: string | null;
+    kvk_number: string | null;
+    email: string | null;
+    account_holder: string | null;
+    bank_name: string | null;
+    bank_account_number: string | null;
+};
+
 type InvoiceLine = {
     id: number;
     description: string;
@@ -22,6 +36,8 @@ type InvoiceLine = {
 type Invoice = {
     id: number;
     type: string;
+    payment_method?: string;
+    invoice_number?: string | null;
     recipient_name: string;
     recipient_email: string;
     amount: number;
@@ -45,14 +61,24 @@ type Props = {
     invoice: Invoice;
     invoice_lines?: InvoiceLine[];
     job: Job;
-    customer: InvoiceDocumentCustomer;
+    customer: InvoiceDocumentCustomer | null;
     company_name: string;
+    company?: InvoiceCompanyDetails | null;
+    company_sender_line?: string;
+    document_date?: string;
+    due_date?: string;
+    delivery_date?: string;
+    payment_method_label?: string;
+    display_invoice_number?: string | null;
+    tax_rate_percent?: number;
+    customer_address_lines?: string[];
     className?: string;
 };
 
-function formatDate(iso: string): string {
+function formatDateNl(iso: string): string {
     try {
-        const d = new Date(iso);
+        const normalized = iso.includes('T') ? iso : `${iso}T12:00:00`;
+        const d = new Date(normalized);
         return new Intl.DateTimeFormat('nl-NL', {
             day: '2-digit',
             month: '2-digit',
@@ -63,203 +89,386 @@ function formatDate(iso: string): string {
     }
 }
 
+function formatQty(q: number): string {
+    return new Intl.NumberFormat('nl-NL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+    }).format(q);
+}
+
 export function InvoicePdfDocument({
     invoice,
     invoice_lines = [],
     job,
     customer,
     company_name,
+    company,
+    company_sender_line,
+    document_date,
+    due_date,
+    delivery_date,
+    payment_method_label,
+    display_invoice_number,
+    tax_rate_percent = 21,
+    customer_address_lines: customerAddressLinesProp,
     className,
 }: Props) {
     const { t } = useTranslation();
-    const addressLine = [
-        [customer.street, customer.house_number].filter(Boolean).join(' '),
-        customer.zip_code,
-        customer.city,
+
+    const addressLineLegacy = [
+        [customer?.street, customer?.house_number].filter(Boolean).join(' '),
+        customer?.zip_code,
+        customer?.city,
     ]
         .filter(Boolean)
         .join(', ');
-    const invoiceDate = formatDate(invoice.created_at);
-    const sentAt = invoice.sent_at ? formatDate(invoice.sent_at) : null;
-    const amountFormatted = formatCurrency(invoice.amount);
-    const statusClass =
-        invoice.status === 'paid'
-            ? 'text-green-700'
-            : invoice.status === 'sent'
-              ? 'text-blue-700 font-medium'
-              : 'text-gray-700';
 
-    const hasLines = invoice_lines && invoice_lines.length > 0;
+    const customerAddressLines =
+        customerAddressLinesProp ??
+        (addressLineLegacy ? [addressLineLegacy] : []);
+
+    const docDate =
+        document_date ??
+        formatDateNl(invoice.sent_at ?? invoice.created_at);
+    const dueDateComputed =
+        due_date ??
+        (() => {
+            try {
+                const base = new Date(invoice.sent_at ?? invoice.created_at);
+                const d = new Date(base);
+                d.setDate(d.getDate() + 14);
+                return new Intl.DateTimeFormat('nl-NL', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                }).format(d);
+            } catch {
+                return docDate;
+            }
+        })();
+    const deliveryDate =
+        delivery_date ?? (job.date ? formatDateNl(job.date) : docDate);
+
+    const paymentLabel =
+        payment_method_label ??
+        (invoice.payment_method === 'cash'
+            ? t('invoices.paymentCash')
+            : t('invoices.paymentCard'));
+
+    const refNumber =
+        display_invoice_number ?? invoice.invoice_number ?? job.invoice_number;
+    const factuurNr =
+        refNumber !== null && refNumber !== ''
+            ? refNumber
+            : t('invoices.pdfNoNumber');
+
+    const hasLines = invoice_lines.length > 0;
+    const subtotal = invoice.subtotal;
+    const taxAmount = invoice.tax_amount;
+    const totalIncl = invoice.total_incl_tax;
+    const showTaxBlock =
+        subtotal !== undefined &&
+        taxAmount !== undefined &&
+        totalIncl !== undefined;
+
+    const baseForVat = formatCurrency(subtotal ?? 0);
+
+    const senderLine =
+        company_sender_line ??
+        [company_name].filter(Boolean).join(', ');
+
+    const companyForFooter: InvoiceCompanyDetails | null =
+        company ??
+        ({
+            name: company_name,
+            street_address: null,
+            postal_code: null,
+            city: null,
+            country: null,
+            tax_number: null,
+            kvk_number: null,
+            email: null,
+            account_holder: null,
+            bank_name: null,
+            bank_account_number: null,
+        } as InvoiceCompanyDetails);
+
+    const footerAddr = [
+        companyForFooter.name,
+        companyForFooter.street_address,
+        [companyForFooter.postal_code, companyForFooter.city]
+            .filter(Boolean)
+            .join(' '),
+        companyForFooter.country,
+    ]
+        .filter((x) => x !== null && x !== '')
+        .join(', ');
+
+    const idBits: string[] = [];
+    if (companyForFooter.tax_number) {
+        idBits.push(
+            `${t('invoices.pdfFooterVat')}: ${companyForFooter.tax_number}`,
+        );
+    }
+    if (companyForFooter.kvk_number) {
+        idBits.push(
+            `${t('invoices.pdfFooterKvk')}: ${companyForFooter.kvk_number}`,
+        );
+    }
+
+    const bankBits: string[] = [];
+    if (companyForFooter.account_holder) {
+        bankBits.push(
+            `${t('invoices.pdfFooterAccountHolder')}: ${companyForFooter.account_holder}`,
+        );
+    }
+    if (companyForFooter.bank_name) {
+        bankBits.push(
+            `${t('invoices.pdfFooterBank')}: ${companyForFooter.bank_name}`,
+        );
+    }
+    if (companyForFooter.bank_account_number) {
+        bankBits.push(
+            `${t('invoices.pdfFooterAccount')}: ${companyForFooter.bank_account_number}`,
+        );
+    }
 
     return (
         <div
             className={cn(
-                'max-w-[42rem] rounded border border-gray-200 bg-white p-0 p-4 font-sans text-sm text-gray-900 antialiased shadow-sm',
+                'max-w-[720px] bg-white p-8 font-sans text-[11px] leading-relaxed text-gray-900 antialiased shadow-sm',
                 className,
             )}
         >
-            <div className="border-b border-gray-200 pb-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <h1 className="text-xl font-semibold text-gray-900">
-                            {company_name}
-                        </h1>
-                        <p className="mt-1 text-sm text-gray-500">
-                            {invoice.type === 'customer'
-                                ? t('invoices.customerInvoice')
-                                : t('invoices.employeeInvoice')}
-                        </p>
-                    </div>
-                    <div className="text-right">
-                        <p className="font-medium">
-                            {t('invoices.invoice')} #{invoice.id}
-                        </p>
-                        {job.invoice_number && (
-                            <p className="mt-1 text-sm text-gray-600">
-                                {t('invoices.ref')}: {job.invoice_number}
-                            </p>
-                        )}
-                        <p className="mt-1 text-sm text-gray-600">
-                            {t('common.date')}: {invoiceDate}
-                        </p>
-                        {invoice.status !== 'draft' && sentAt && (
-                            <p className="mt-1 text-xs text-gray-500">
-                                {t('invoices.sent')}: {sentAt}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
+            <h1 className="mb-1.5 text-[26px] font-bold uppercase tracking-wide">
+                {t('invoices.pdfTitle')}
+            </h1>
+            {senderLine ? (
+                <p className="mb-7 max-w-[90%] text-[11px] text-gray-500">
+                    {senderLine}
+                </p>
+            ) : null}
 
-            <div className="mt-8 space-y-6">
-                <div>
-                    <p className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">
-                        {t('invoices.billTo')}
+            <div className="mb-5 flex flex-wrap gap-6">
+                <div className="min-w-[240px] flex-1">
+                    <p className="mb-2 text-[11px] font-bold">
+                        {t('invoices.pdfCustomerLabel')}
                     </p>
-                    <p className="font-medium text-gray-900">
+                    <p className="mb-1 text-[12px] font-bold">
                         {invoice.recipient_name}
                     </p>
-                    <p className="text-sm text-gray-600">
-                        {invoice.recipient_email}
-                    </p>
-                </div>
-                {addressLine && (
-                    <div>
-                        <p className="text-[11px] font-medium tracking-wide text-gray-500 uppercase">
-                            {t('invoices.serviceAddress')}
+                    {customerAddressLines.map((line) => (
+                        <p key={line} className="text-[11px] text-gray-700">
+                            {line}
                         </p>
-                        <p className="text-sm text-gray-600">{addressLine}</p>
-                        {customer.phone && (
-                            <p className="mt-1 text-sm text-gray-600">
-                                {customer.phone}
-                            </p>
-                        )}
-                    </div>
-                )}
+                    ))}
+                </div>
+                <div className="min-w-[220px] flex-1">
+                    <table className="w-full font-sans text-[11px]">
+                        <tbody>
+                            <tr>
+                                <td className="py-0.5 text-gray-700">
+                                    {t('invoices.pdfInvoiceNumberShort')}
+                                </td>
+                                <td className="py-0.5 text-right font-bold">
+                                    {factuurNr}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="py-0.5 text-gray-700">
+                                    {t('invoices.invoiceDate')}
+                                </td>
+                                <td className="py-0.5 text-right font-bold">
+                                    {docDate}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="py-0.5 text-gray-700">
+                                    {t('invoices.dueDate')}
+                                </td>
+                                <td className="py-0.5 text-right font-bold">
+                                    {dueDateComputed}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colSpan={2} className="h-2" />
+                            </tr>
+                            <tr>
+                                <td className="py-0.5 text-gray-700">
+                                    {t('invoices.pdfDeliveryDate')}
+                                </td>
+                                <td className="py-0.5 text-right font-bold">
+                                    {deliveryDate}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="py-0.5 text-gray-700">
+                                    {t('invoices.pdfPaymentMethod')}
+                                </td>
+                                <td className="py-0.5 text-right font-bold">
+                                    {paymentLabel}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <table className="mt-8 w-full border-collapse text-sm min-w-[500px]">
+            <table className="mb-5 w-full border-collapse font-sans text-[10px]">
                 <thead>
-                    <tr>
-                        <th className="border-b border-gray-200 py-2 text-left font-medium text-gray-600">
-                            {t('common.description')}
+                    <tr className="bg-gray-200 text-gray-700">
+                        <th className="border border-gray-300 px-1.5 py-2 text-left font-bold uppercase tracking-wide">
+                            {t('invoices.pdfColDescription')}
                         </th>
-                        {hasLines && (
+                        {hasLines ? (
                             <>
-                                <th className="border-b border-gray-200 py-2 text-right font-medium text-gray-600">
-                                    {t('invoices.quantity')}
+                                <th className="w-[8%] border border-gray-300 px-1.5 py-2 text-center font-bold uppercase tracking-wide">
+                                    {t('invoices.pdfColQty')}
                                 </th>
-                                <th className="border-b border-gray-200 py-2 text-right font-medium text-gray-600">
-                                    {t('invoices.unitPrice')}
+                                <th className="w-[14%] border border-gray-300 px-1.5 py-2 text-right font-bold uppercase tracking-wide">
+                                    {t('invoices.pdfColPrice')}
+                                </th>
+                                <th className="w-[11%] border border-gray-300 px-1.5 py-2 text-right font-bold uppercase tracking-wide">
+                                    {t('invoices.pdfColDiscount')}
+                                </th>
+                                <th className="w-[15%] border border-gray-300 px-1.5 py-2 text-right font-bold uppercase tracking-wide">
+                                    {t('invoices.pdfColAmount')}
+                                </th>
+                            </>
+                        ) : (
+                            <>
+                                <th className="w-[18%] border border-gray-300 px-1.5 py-2 text-center font-bold uppercase tracking-wide">
+                                    {t('common.date')}
+                                </th>
+                                <th className="w-[22%] border border-gray-300 px-1.5 py-2 text-right font-bold uppercase tracking-wide">
+                                    {t('invoices.pdfColAmount')}
                                 </th>
                             </>
                         )}
-                        {!hasLines && (
-                            <th className="border-b border-gray-200 py-2 text-right font-medium text-gray-600">
-                                {t('common.date')}
-                            </th>
-                        )}
-                        <th className="border-b border-gray-200 py-2 text-right font-medium text-gray-600">
-                            {t('invoices.amount')}
-                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {hasLines ? (
                         invoice_lines.map((line) => (
                             <tr key={line.id}>
-                                <td className="border-b border-gray-200 py-3 text-gray-900">
+                                <td className="border-b border-gray-200 px-1.5 py-2.5 align-top">
                                     {line.description}
                                 </td>
-                                <td className="border-b border-gray-200 py-3 text-right text-gray-900">
-                                    {line.quantity}
+                                <td className="border-b border-gray-200 px-1.5 py-2.5 text-center align-top">
+                                    {formatQty(line.quantity)}
                                 </td>
-                                <td className="border-b border-gray-200 py-3 text-right text-gray-900">
+                                <td className="border-b border-gray-200 px-1.5 py-2.5 text-right align-top">
                                     {formatCurrency(line.unit_price)}
                                 </td>
-                                <td className="border-b border-gray-200 py-3 text-right font-medium text-gray-900">
+                                <td className="border-b border-gray-200 px-1.5 py-2.5 text-right align-top">
+                                    0,00
+                                </td>
+                                <td className="border-b border-gray-200 px-1.5 py-2.5 text-right font-bold align-top">
                                     {formatCurrency(line.total)}
                                 </td>
                             </tr>
                         ))
                     ) : (
                         <tr>
-                            <td className="border-b border-gray-200 py-3 text-gray-900">
-                                {t('invoices.jobNumber', { id: job.id })}
-                                {job.description && (
-                                    <span className="mt-0.5 block text-xs text-gray-500">
+                            <td className="border-b border-gray-200 px-1.5 py-2.5 align-top">
+                                <span>
+                                    {t('invoices.pdfJobLine', { id: job.id })}
+                                </span>
+                                {job.description ? (
+                                    <span className="mt-0.5 block text-[9px] text-gray-500">
                                         {job.description}
                                     </span>
-                                )}
+                                ) : null}
                             </td>
-                            <td className="border-b border-gray-200 py-3 text-right text-gray-900">
-                                {job.date}
-                                {job.scheduled_time && (
-                                    <span className="mt-0.5 block text-xs text-gray-500">
+                            <td className="border-b border-gray-200 px-1.5 py-2.5 text-center align-top">
+                                {formatDateNl(job.date)}
+                                {job.scheduled_time ? (
+                                    <span className="mt-0.5 block text-[9px] text-gray-500">
                                         {job.scheduled_time}
                                     </span>
-                                )}
+                                ) : null}
                             </td>
-                            <td className="border-b border-gray-200 py-3 text-right font-medium text-gray-900">
-                                {amountFormatted}
+                            <td className="border-b border-gray-200 px-1.5 py-2.5 text-right font-bold align-top">
+                                {formatCurrency(invoice.amount)}
                             </td>
                         </tr>
                     )}
                 </tbody>
             </table>
 
-            {invoice.subtotal !== undefined && invoice.tax_amount !== undefined && (
-                <div className="mt-6 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">
-                            {t('invoices.subtotalExclTax')}:
-                        </span>
-                        <span className="font-medium">
-                            {formatCurrency(invoice.subtotal)}
-                        </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-500">
-                            {t('invoices.taxAmount')}:
-                        </span>
-                        <span className="font-medium">
-                            {formatCurrency(invoice.tax_amount)}
-                        </span>
-                    </div>
+            {showTaxBlock ? (
+                <div className="mb-2 flex justify-end">
+                    <table className="w-[58%] border-collapse border border-gray-300 font-sans text-[11px]">
+                        <tbody>
+                            <tr>
+                                <td className="border-b border-gray-200 px-3 py-2 text-left text-gray-700">
+                                    {t('invoices.pdfTotalExclVat')}:
+                                </td>
+                                <td className="border-b border-gray-200 px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatCurrency(subtotal ?? 0)}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="border-b border-gray-200 px-3 py-2 text-left text-gray-700">
+                                    {t('invoices.pdfVatLine', {
+                                        rate: tax_rate_percent,
+                                        base: baseForVat,
+                                    })}
+                                </td>
+                                <td className="border-b border-gray-200 px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatCurrency(taxAmount ?? 0)}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="border-b border-gray-200 px-3 py-2 text-left text-gray-700">
+                                    {t('invoices.pdfTotalInclEur')}:
+                                </td>
+                                <td className="border-b border-gray-200 px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatCurrency(totalIncl ?? 0)}
+                                </td>
+                            </tr>
+                            <tr className="bg-[#1d4ed8] text-white">
+                                <td className="px-3 py-2 font-bold">
+                                    {t('invoices.pdfAmountDueEur')}
+                                </td>
+                                <td className="px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatCurrency(totalIncl ?? 0)}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="mb-2 flex justify-end">
+                    <table className="w-[58%] border-collapse border border-gray-300 font-sans text-[11px]">
+                        <tbody>
+                            <tr className="bg-[#1d4ed8] text-white">
+                                <td className="px-3 py-2 font-bold">
+                                    {t('invoices.pdfAmountDueEur')}
+                                </td>
+                                <td className="px-3 py-2 text-right font-bold whitespace-nowrap">
+                                    {formatCurrency(invoice.amount)}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             )}
 
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 pt-6">
-                <p className="text-sm text-gray-600">
-                    {t('invoices.status')}:{' '}
-                    <span className={statusClass}>{invoice.status}</span>
-                </p>
-                <p className="text-xl font-semibold text-gray-900">
-                    {t('invoices.totalInclTax')}:{' '}
-                    {invoice.total_incl_tax !== undefined
-                        ? formatCurrency(invoice.total_incl_tax)
-                        : amountFormatted}
-                </p>
+            <div className="mt-9 border-t border-gray-300 pt-4 text-[9px] leading-relaxed text-gray-600">
+                {footerAddr ? (
+                    <p className="mb-1.5">{footerAddr}</p>
+                ) : null}
+                {idBits.length > 0 ? (
+                    <p className="mb-1.5">{idBits.join(' | ')}</p>
+                ) : null}
+                {companyForFooter.email ? (
+                    <p className="mb-1.5">
+                        {t('invoices.pdfFooterEmail')}:{' '}
+                        {companyForFooter.email}
+                    </p>
+                ) : null}
+                {bankBits.length > 0 ? <p>{bankBits.join(' | ')}</p> : null}
             </div>
         </div>
     );

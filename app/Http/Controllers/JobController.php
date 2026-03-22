@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Employee;
+use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\JobType;
 use App\Models\WhatsAppMessageLog;
@@ -131,6 +132,11 @@ class JobController extends Controller
 
         $job->load(['customer', 'employee', 'invoices', 'jobType']);
 
+        $invoiceDisplayRef = $job->invoices
+            ->sortBy('id')
+            ->first(fn (Invoice $i) => filled($i->invoice_number))?->invoice_number
+            ?? $job->invoice_number;
+
         $whatsappSentAt = WhatsAppMessageLog::where('context_type', Job::class)
             ->where('context_id', $job->id)
             ->where('direction', 'outbound')
@@ -164,7 +170,7 @@ class JobController extends Controller
                 'price' => $displayPrice,
                 'base_price' => (float) $job->price,
                 'is_paid' => $job->is_paid,
-                'invoice_number' => $job->invoice_number,
+                'invoice_number' => $invoiceDisplayRef,
                 'customer' => $job->customer ? [
                     'id' => $job->customer->id,
                     'name' => $job->customer->name,
@@ -185,6 +191,8 @@ class JobController extends Controller
                 'invoices' => $job->invoices->map(fn ($inv) => [
                     'id' => $inv->id,
                     'type' => $inv->type,
+                    'payment_method' => $inv->payment_method,
+                    'invoice_number' => $inv->invoice_number,
                     'recipient_name' => $inv->recipient_name,
                     'recipient_email' => $inv->recipient_email,
                     'amount' => (float) $inv->amount,
@@ -260,8 +268,6 @@ class JobController extends Controller
             ]);
         }
 
-        $invoiceNumber = 'INV-'.now()->format('Ymd').'-'.(Job::where('company_id', $companyId)->whereDate('created_at', today())->count() + 1);
-
         $scheduledTime = null;
         if (! empty($validated['scheduled_time'])) {
             $scheduledTime = \Carbon\Carbon::createFromFormat('H:i', $validated['scheduled_time'])->format('H:i:s');
@@ -279,7 +285,7 @@ class JobController extends Controller
             'job_info' => ! empty($validated['job_info']) ? [$validated['job_info']] : null,
             'job_type_id' => $validated['job_type_id'],
             'job_type_other' => $validated['job_type_other'] ?? null,
-            'invoice_number' => $invoiceNumber,
+            'invoice_number' => null,
             'is_paid' => false,
         ]);
 

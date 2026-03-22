@@ -30,7 +30,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { InvoicePdfDocument } from '@/components/invoice-pdf-document';
-import type { InvoiceDocumentCustomer } from '@/components/invoice-pdf-document';
+import type {
+    InvoiceCompanyDetails,
+    InvoiceDocumentCustomer,
+} from '@/components/invoice-pdf-document';
 import AppLayout from '@/layouts/app-layout';
 import {
     Briefcase,
@@ -53,6 +56,8 @@ import { formatCurrency } from '@/lib/utils';
 type Invoice = {
     id: number;
     type: string;
+    payment_method: string;
+    invoice_number: string | null;
     recipient_name: string;
     recipient_email: string;
     amount: number;
@@ -154,6 +159,9 @@ export default function JobsShow({
     
     const [invoiceOpen, setInvoiceOpen] = useState(false);
     const [invoiceStep, setInvoiceStep] = useState<1 | 2>(1);
+    const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash'>(
+        'card',
+    );
     const [invoiceType, setInvoiceType] = useState<'customer' | 'employee'>(
         'customer',
     );
@@ -174,7 +182,14 @@ export default function JobsShow({
         null,
     );
     const [invoicePreviewData, setInvoicePreviewData] = useState<{
-        invoice: Props['job']['invoices'][0] & { created_at: string };
+        invoice: Props['job']['invoices'][0] & {
+            created_at: string;
+            payment_method?: string;
+            invoice_number?: string | null;
+            subtotal?: number;
+            tax_amount?: number;
+            total_incl_tax?: number;
+        };
         invoice_lines?: InvoiceLineAPI[];
         job: {
             id: number;
@@ -183,8 +198,17 @@ export default function JobsShow({
             scheduled_time: string | null;
             invoice_number: string | null;
         };
-        customer: InvoiceDocumentCustomer;
+        customer: InvoiceDocumentCustomer | null;
         company_name: string;
+        company?: InvoiceCompanyDetails | null;
+        company_sender_line?: string;
+        document_date?: string;
+        due_date?: string;
+        delivery_date?: string;
+        payment_method_label?: string;
+        display_invoice_number?: string | null;
+        tax_rate_percent?: number;
+        customer_address_lines?: string[];
     } | null>(null);
     const [invoicePreviewLoading, setInvoicePreviewLoading] = useState(false);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -210,6 +234,7 @@ export default function JobsShow({
                 total: job.price,
             },
         ]);
+        setPaymentMethod('card');
         setInvoiceOpen(true);
     };
 
@@ -224,6 +249,9 @@ export default function JobsShow({
                 setEditingInvoiceId(invId);
                 setInvoiceStep(1);
                 setInvoiceType(data.invoice.type);
+                setPaymentMethod(
+                    data.invoice.payment_method === 'cash' ? 'cash' : 'card',
+                );
                 setRecipientName(data.invoice.recipient_name);
                 setRecipientEmail(data.invoice.recipient_email);
                 setInvoiceLines(
@@ -310,6 +338,7 @@ export default function JobsShow({
         
         const invoiceData = {
             type: invoiceType,
+            payment_method: paymentMethod,
             recipient_name: recipientName,
             recipient_email: recipientEmail,
             amount: getTotalAmount(),
@@ -722,6 +751,47 @@ export default function JobsShow({
                                                     </Select>
                                                 </div>
                                                 <div className="grid gap-2">
+                                                    <Label>
+                                                        {t('invoices.paymentMethod')}
+                                                    </Label>
+                                                    <Select
+                                                        value={paymentMethod}
+                                                        onValueChange={(v) =>
+                                                            setPaymentMethod(
+                                                                v as
+                                                                    | 'card'
+                                                                    | 'cash',
+                                                            )
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="card">
+                                                                {t(
+                                                                    'invoices.paymentCard',
+                                                                )}
+                                                            </SelectItem>
+                                                            <SelectItem value="cash">
+                                                                {t(
+                                                                    'invoices.paymentCash',
+                                                                )}
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <p className="text-muted-foreground text-xs">
+                                                        {paymentMethod ===
+                                                        'cash'
+                                                            ? t(
+                                                                  'invoices.cashNoRefShort',
+                                                              )
+                                                            : t(
+                                                                  'invoices.cardRefHint',
+                                                              )}
+                                                    </p>
+                                                </div>
+                                                <div className="grid gap-2">
                                                     <Label htmlFor="inv-recipient-name">
                                                         {t('invoices.recipientName')}
                                                     </Label>
@@ -1071,6 +1141,17 @@ export default function JobsShow({
                                             {inv.type} — {inv.recipient_name} (
                                             <span className="break-all">{inv.recipient_email}</span>) —{' '}
                                             {formatCurrency(inv.amount)}
+                                            {inv.invoice_number ? (
+                                                <span className="text-muted-foreground">
+                                                    {' '}
+                                                    · {inv.invoice_number}
+                                                </span>
+                                            ) : inv.payment_method === 'cash' ? (
+                                                <span className="text-muted-foreground">
+                                                    {' '}
+                                                    · {t('invoices.cashNoRefShort')}
+                                                </span>
+                                            ) : null}
                                         </span>
                                         <div className="flex flex-wrap items-center gap-2 shrink-0">
                                             <Button
@@ -1178,6 +1259,27 @@ export default function JobsShow({
                                 job={invoicePreviewData.job}
                                 customer={invoicePreviewData.customer}
                                 company_name={invoicePreviewData.company_name}
+                                company={invoicePreviewData.company}
+                                company_sender_line={
+                                    invoicePreviewData.company_sender_line
+                                }
+                                document_date={invoicePreviewData.document_date}
+                                due_date={invoicePreviewData.due_date}
+                                delivery_date={
+                                    invoicePreviewData.delivery_date
+                                }
+                                payment_method_label={
+                                    invoicePreviewData.payment_method_label
+                                }
+                                display_invoice_number={
+                                    invoicePreviewData.display_invoice_number
+                                }
+                                tax_rate_percent={
+                                    invoicePreviewData.tax_rate_percent
+                                }
+                                customer_address_lines={
+                                    invoicePreviewData.customer_address_lines
+                                }
                                 className="bg-white"
                             />
                         )}

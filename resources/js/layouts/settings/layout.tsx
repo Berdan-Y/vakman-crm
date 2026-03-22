@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -10,45 +10,23 @@ import { edit as editLocale } from '@/routes/locale';
 import { edit } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
-import type { NavItem } from '@/types';
+import type { NavItem, SharedData } from '@/types';
 import { useTranslation } from 'react-i18next';
-
-const sidebarNavItems: NavItem[] = [
-    {
-        title: 'Profile',
-        href: edit(),
-        icon: null,
-    },
-    {
-        title: 'Password',
-        href: editPassword(),
-        icon: null,
-    },
-    {
-        title: 'Two-Factor Auth',
-        href: show(),
-        icon: null,
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-        icon: null,
-    },
-    {
-        title: 'Language',
-        href: editLocale(),
-        icon: null,
-    },
-    {
-        title: 'Integrations',
-        href: '/settings/integrations',
-        icon: null,
-    },
-];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentUrl } = useCurrentUrl();
     const { t } = useTranslation();
+    const { auth } = usePage<SharedData>().props;
+
+    const companySettingsItem: NavItem[] = auth.currentCompany
+        ? [
+              {
+                  title: t('settings.company'),
+                  href: `/companies/${auth.currentCompany.id}/edit`,
+                  icon: null,
+              },
+          ]
+        : [];
 
     const sidebarNavItems: NavItem[] = [
         {
@@ -81,6 +59,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
             href: '/settings/integrations',
             icon: null,
         },
+        ...companySettingsItem,
         {
             title: t('settings.jobTypes'),
             href: '/settings/job-types',

@@ -1,7 +1,10 @@
 import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { InvoicePdfDocument } from '@/components/invoice-pdf-document';
-import type { InvoiceDocumentCustomer } from '@/components/invoice-pdf-document';
+import type {
+    InvoiceCompanyDetails,
+    InvoiceDocumentCustomer,
+} from '@/components/invoice-pdf-document';
 import AppLayout from '@/layouts/app-layout';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -10,9 +13,14 @@ import type { BreadcrumbItem } from '@/types';
 type InvoiceData = {
     id: number;
     type: string;
+    payment_method?: string;
+    invoice_number?: string | null;
     recipient_name: string;
     recipient_email: string;
     amount: number;
+    subtotal?: number;
+    tax_amount?: number;
+    total_incl_tax?: number;
     status: string;
     created_at: string;
     sent_at: string | null;
@@ -38,8 +46,17 @@ type Props = {
     invoice: InvoiceData;
     invoice_lines?: InvoiceLine[];
     job: JobData;
-    customer: InvoiceDocumentCustomer;
+    customer: InvoiceDocumentCustomer | null;
     company_name: string;
+    company?: InvoiceCompanyDetails | null;
+    company_sender_line?: string;
+    document_date?: string;
+    due_date?: string;
+    delivery_date?: string;
+    payment_method_label?: string;
+    display_invoice_number?: string | null;
+    tax_rate_percent?: number;
+    customer_address_lines?: string[];
 };
 
 export default function InvoicesShow({
@@ -48,6 +65,15 @@ export default function InvoicesShow({
     job,
     customer,
     company_name,
+    company,
+    company_sender_line,
+    document_date,
+    due_date,
+    delivery_date,
+    payment_method_label,
+    display_invoice_number,
+    tax_rate_percent,
+    customer_address_lines,
 }: Props) {
     const { t } = useTranslation();
 
@@ -85,6 +111,15 @@ export default function InvoicesShow({
                         job={job}
                         customer={customer}
                         company_name={company_name}
+                        company={company}
+                        company_sender_line={company_sender_line}
+                        document_date={document_date}
+                        due_date={due_date}
+                        delivery_date={delivery_date}
+                        payment_method_label={payment_method_label}
+                        display_invoice_number={display_invoice_number}
+                        tax_rate_percent={tax_rate_percent}
+                        customer_address_lines={customer_address_lines}
                     />
                 </div>
             </div>

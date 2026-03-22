@@ -30,6 +30,7 @@ export default function EmployeesCreate() {
         name: '',
         email: '',
         phone: '',
+        kvk_number: '',
         role: 'employee' as 'employee' | 'admin',
         join_date: new Date().toISOString().slice(0, 10),
         create_account: false,
@@ -96,6 +97,24 @@ export default function EmployeesCreate() {
                                     autoComplete="tel"
                                 />
                                 <InputError message={form.errors.phone} />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="kvk_number">
+                                    {t('companies.kvkNumber')}
+                                </Label>
+                                <Input
+                                    id="kvk_number"
+                                    type="text"
+                                    value={form.data.kvk_number}
+                                    onChange={(e) =>
+                                        form.setData(
+                                            'kvk_number',
+                                            e.target.value,
+                                        )
+                                    }
+                                    autoComplete="off"
+                                />
+                                <InputError message={form.errors.kvk_number} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="role">{t('employees.role')}</Label>

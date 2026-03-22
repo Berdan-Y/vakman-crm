@@ -6,12 +6,40 @@ use App\Models\Company;
 use App\Models\JobType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CompanyController extends Controller
 {
+    /**
+     * @return array<string, array<int, string>>
+     */
+    private function companyValidationRules(): array
+    {
+        return [
+            'name' => ['required', 'string', 'max:255'],
+            'industry' => ['nullable', 'string', 'max:255'],
+            'street_address' => ['nullable', 'string', 'max:255'],
+            'postal_code' => ['nullable', 'string', 'max:32'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'country' => ['nullable', 'string', 'max:255'],
+            'tax_number' => ['nullable', 'string', 'max:64'],
+            'kvk_number' => ['nullable', 'string', 'max:64'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'account_holder' => ['nullable', 'string', 'max:255'],
+            'bank_name' => ['nullable', 'string', 'max:255'],
+            'bank_account_number' => ['nullable', 'string', 'max:64'],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function companyPayload(Request $request): array
+    {
+        return $request->validate($this->companyValidationRules());
+    }
+
     public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
@@ -23,12 +51,7 @@ class CompanyController extends Controller
         $companies = $user->companies()
             ->orderBy('name')
             ->get()
-            ->map(fn (Company $company) => [
-                'id' => $company->id,
-                'name' => $company->name,
-                'industry' => $company->industry,
-                'role' => $company->pivot->role,
-            ]);
+            ->map(fn (Company $company) => $company->toInertiaArray((string) $company->pivot->role));
 
         $currentCompanyId = session('current_company_id');
 
@@ -50,15 +73,7 @@ class CompanyController extends Controller
     {
         $user = $request->user();
 
-        Validator::make($request->all(), [
-            'name' => ['required', 'string', 'max:255'],
-            'industry' => ['nullable', 'string', 'max:255'],
-        ])->validate();
-
-        $company = Company::create([
-            'name' => $request->input('name'),
-            'industry' => $request->input('industry'),
-        ]);
+        $company = Company::create($this->companyPayload($request));
 
         $company->users()->attach($user->id, ['role' => 'owner']);
 
@@ -69,6 +84,45 @@ class CompanyController extends Controller
         // Use full redirect to ensure fresh CSRF token after company creation
         return redirect('/dashboard')
             ->with('success', __('Company created successfully.'));
+    }
+
+    public function edit(Request $request, Company $company): Response|RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        $membership = $user->companies()->where('company_id', $company->id)->first();
+
+        if (! $membership) {
+            abort(403);
+        }
+
+        return Inertia::render('companies/edit', [
+            'company' => $company->toInertiaArray((string) $membership->pivot->role),
+        ]);
+    }
+
+    public function update(Request $request, Company $company): RedirectResponse
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return redirect()->route('login');
+        }
+
+        $belongs = $user->companies()->where('company_id', $company->id)->exists();
+
+        if (! $belongs) {
+            abort(403);
+        }
+
+        $company->update($this->companyPayload($request));
+
+        return redirect()->route('companies.edit', $company)
+            ->with('success', __('Company updated successfully.'));
     }
 
     public function switch(Request $request): RedirectResponse

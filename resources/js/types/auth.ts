@@ -15,6 +15,16 @@ export type Company = {
     id: number;
     name: string;
     industry: string | null;
+    street_address: string | null;
+    postal_code: string | null;
+    city: string | null;
+    country: string | null;
+    tax_number: string | null;
+    kvk_number: string | null;
+    email: string | null;
+    account_holder: string | null;
+    bank_name: string | null;
+    bank_account_number: string | null;
     role: string;
 };
 

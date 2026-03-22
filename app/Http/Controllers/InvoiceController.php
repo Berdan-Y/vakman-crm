@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Mail\InvoiceMail;
 use App\Models\Invoice;
+use App\Support\InvoicePdfViewData;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,48 +42,16 @@ class InvoiceController extends Controller
      */
     public function pdf(Request $request, Invoice $invoice): \Illuminate\Http\Response
     {
-        $payload = $this->getInvoicePayload($invoice);
-        if (! $payload) {
+        $companyId = session('current_company_id');
+        $invoice->load('job.company');
+        if ($invoice->job->company_id !== $companyId) {
             abort(404);
         }
+        $invoice->load('job.customer', 'lines');
 
-        $invoiceData = $payload['invoice'];
-        $invoiceLines = $payload['invoice_lines'] ?? [];
-        $job = $payload['job'];
-        $customer = $payload['customer'];
-        $companyName = $payload['company_name'];
-
-        $invoiceDate = \Carbon\Carbon::parse($invoiceData['created_at'])->locale('nl_NL')->translatedFormat('j F Y');
-        $sentAt = $invoiceData['sent_at']
-            ? \Carbon\Carbon::parse($invoiceData['sent_at'])->locale('nl_NL')->translatedFormat('j F Y')
-            : null;
-
-        $streetHouseNumber = $customer['street'].' '.$customer['house_number'];
-        if ($customer['house_number_addition']) {
-            $streetHouseNumber .= ' '.$customer['house_number_addition'];
-        }
-
-        $addressLine = implode(', ', array_filter([
-            $streetHouseNumber,
-            $customer['zip_code'] ?? null,
-            $customer['city'] ?? null,
-        ]));
-        $amountFormatted = '€ '.number_format((float) $invoiceData['amount'], 2, ',', ' ');
-
-        $pdf = Pdf::loadView('invoices.pdf', [
-            'invoice' => $invoiceData,
-            'invoice_lines' => $invoiceLines,
-            'job' => $job,
-            'customer' => $customer,
-            'company_name' => $companyName,
-            'invoice_date' => $invoiceDate,
-            'sent_at' => $sentAt,
-            'address_line' => $addressLine,
-            'amount_formatted' => $amountFormatted,
-        ])
-            ->setBasePath(public_path());
-
-        return $pdf->stream('invoice-'.$invoice->id.'.pdf', ['Attachment' => false]);
+        return Pdf::loadView('invoices.pdf', InvoicePdfViewData::make($invoice))
+            ->setBasePath(public_path())
+            ->stream('invoice-'.$invoice->id.'.pdf', ['Attachment' => false]);
     }
 
     /**
@@ -96,100 +65,32 @@ class InvoiceController extends Controller
             return null;
         }
 
-        $companyName = $invoice->job->company->name ?? config('app.name');
+        $pdf = InvoicePdfViewData::make($invoice);
 
         return [
-            'invoice' => [
-                'id' => $invoice->id,
-                'type' => $invoice->type,
-                'recipient_name' => $invoice->recipient_name,
-                'recipient_email' => $invoice->recipient_email,
-                'amount' => (float) $invoice->amount,
-                'status' => $invoice->status,
-                'created_at' => $invoice->created_at->toIso8601String(),
-                'sent_at' => $invoice->sent_at?->toIso8601String(),
-            ],
-            'invoice_lines' => $invoice->lines->map(fn ($line) => [
-                'id' => $line->id,
-                'description' => $line->description,
-                'quantity' => (float) $line->quantity,
-                'unit_price' => (float) $line->unit_price,
-                'total' => (float) $line->total,
-            ])->toArray(),
-            'job' => [
-                'id' => $invoice->job->id,
-                'description' => $invoice->job->description,
-                'date' => $invoice->job->date->format('Y-m-d'),
-                'scheduled_time' => $invoice->job->scheduled_time
-                    ? (is_string($invoice->job->scheduled_time)
-                        ? substr($invoice->job->scheduled_time, 0, 5)
-                        : $invoice->job->scheduled_time->format('H:i'))
-                    : null,
-                'invoice_number' => $invoice->job->invoice_number,
-            ],
-            'customer' => $invoice->job->customer ? [
-                'name' => $invoice->job->customer->name,
-                'email' => $invoice->job->customer->email,
-                'phone' => $invoice->job->customer->phone,
-                'street' => $invoice->job->customer->street,
-                'house_number' => $invoice->job->customer->house_number,
-                'zip_code' => $invoice->job->customer->zip_code,
-                'city' => $invoice->job->customer->city,
-            ] : null,
-            'company_name' => $companyName,
+            'invoice' => $pdf['invoice'],
+            'invoice_lines' => $pdf['invoice_lines'],
+            'job' => $pdf['job'],
+            'customer' => $pdf['customer'],
+            'company_name' => $pdf['company_name'],
+            'company' => $pdf['company'],
+            'company_sender_line' => $pdf['company_sender_line'],
+            'document_date' => $pdf['document_date'],
+            'due_date' => $pdf['due_date'],
+            'delivery_date' => $pdf['delivery_date'],
+            'payment_method_label' => $pdf['payment_method_label'],
+            'display_invoice_number' => $pdf['display_invoice_number'],
+            'tax_rate_percent' => $pdf['tax_rate_percent'],
+            'customer_address_lines' => $pdf['customer_address_lines'],
         ];
-    }
-
-    private function generatePdfContent(Invoice $invoice): string
-    {
-        $payload = $this->getInvoicePayload($invoice);
-        if (! $payload) {
-            abort(404);
-        }
-
-        $invoiceData = $payload['invoice'];
-        $invoiceLines = $payload['invoice_lines'] ?? [];
-        $job = $payload['job'];
-        $customer = $payload['customer'];
-        $companyName = $payload['company_name'];
-
-        $invoiceDate = \Carbon\Carbon::parse($invoiceData['created_at'])->locale('nl_NL')->translatedFormat('j F Y');
-        $sentAt = $invoiceData['sent_at']
-            ? \Carbon\Carbon::parse($invoiceData['sent_at'])->locale('nl_NL')->translatedFormat('j F Y')
-            : null;
-
-        $streetHouseNumber = $customer['street'].' '.$customer['house_number'];
-        if ($customer['house_number_addition'] ?? null) {
-            $streetHouseNumber .= ' '.$customer['house_number_addition'];
-        }
-
-        $addressLine = implode(', ', array_filter([
-            $streetHouseNumber,
-            $customer['zip_code'] ?? null,
-            $customer['city'] ?? null,
-        ]));
-        $amountFormatted = '€ '.number_format((float) $invoiceData['amount'], 2, ',', ' ');
-
-        $pdf = Pdf::loadView('invoices.pdf', [
-            'invoice' => $invoiceData,
-            'invoice_lines' => $invoiceLines,
-            'job' => $job,
-            'customer' => $customer,
-            'company_name' => $companyName,
-            'invoice_date' => $invoiceDate,
-            'sent_at' => $sentAt,
-            'address_line' => $addressLine,
-            'amount_formatted' => $amountFormatted,
-        ])
-            ->setBasePath(public_path());
-
-        return $pdf->output();
     }
 
     private function sendInvoiceEmail(Invoice $invoice): void
     {
+        $locale = auth()->user()?->locale ?? config('app.locale', 'nl');
+
         Mail::to($invoice->recipient_email)
-            ->send(new InvoiceMail($invoice));
+            ->send(new InvoiceMail($invoice, $locale));
     }
 
     public function send(Request $request, Invoice $invoice): RedirectResponse
@@ -205,12 +106,13 @@ class InvoiceController extends Controller
         }
 
         try {
-            $this->sendInvoiceEmail($invoice);
+            $sentAt = now();
+            $invoice->status = Invoice::STATUS_SENT;
+            $invoice->sent_at = $sentAt;
+            $invoice->assignCardInvoiceNumberIfNeeded($sentAt);
+            $invoice->save();
 
-            $invoice->update([
-                'status' => Invoice::STATUS_SENT,
-                'sent_at' => now(),
-            ]);
+            $this->sendInvoiceEmail($invoice);
 
             return redirect()->back()
                 ->with('success', __('Invoice sent successfully to '.$invoice->recipient_email));
@@ -233,6 +135,7 @@ class InvoiceController extends Controller
         $validated = $request->validate([
             'job_id' => ['required', 'exists:crm_jobs,id'],
             'type' => ['required', 'in:customer,employee'],
+            'payment_method' => ['required', 'string', 'in:card,cash'],
             'recipient_name' => ['required', 'string', 'max:255'],
             'recipient_email' => ['required', 'email', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
@@ -267,9 +170,13 @@ class InvoiceController extends Controller
             $totalInclTax = $subtotal + $taxAmount;
         }
 
+        $sentAt = $send ? now() : null;
+
         $invoice = Invoice::create([
             'crm_job_id' => $job->id,
             'type' => $validated['type'],
+            'payment_method' => $validated['payment_method'],
+            'invoice_number' => null,
             'recipient_name' => $validated['recipient_name'],
             'recipient_email' => $validated['recipient_email'],
             'amount' => $validated['amount'],
@@ -277,8 +184,13 @@ class InvoiceController extends Controller
             'tax_amount' => round($taxAmount, 2),
             'total_incl_tax' => round($totalInclTax, 2),
             'status' => $send ? Invoice::STATUS_SENT : Invoice::STATUS_DRAFT,
-            'sent_at' => $send ? now() : null,
+            'sent_at' => $sentAt,
         ]);
+
+        if ($send && $sentAt) {
+            $invoice->assignCardInvoiceNumberIfNeeded($sentAt);
+            $invoice->save();
+        }
 
         foreach ($validated['lines'] as $index => $line) {
             $lineTotal = $line['total'];
@@ -354,6 +266,7 @@ class InvoiceController extends Controller
 
         $validated = $request->validate([
             'type' => ['required', 'in:customer,employee'],
+            'payment_method' => ['required', 'string', 'in:card,cash'],
             'recipient_name' => ['required', 'string', 'max:255'],
             'recipient_email' => ['required', 'email', 'max:255'],
             'amount' => ['required', 'numeric', 'min:0'],
@@ -369,6 +282,8 @@ class InvoiceController extends Controller
         $send = ! empty($validated['send']);
         $priceIncludesTax = ! empty($validated['price_includes_tax']);
         $taxRate = 21.00;
+
+        $previousStatus = $invoice->status;
 
         // Calculate tax fields
         $subtotal = 0;
@@ -386,7 +301,21 @@ class InvoiceController extends Controller
             $totalInclTax = $subtotal + $taxAmount;
         }
 
-        $invoice->update([
+        if ($previousStatus === Invoice::STATUS_PAID) {
+            $finalStatus = Invoice::STATUS_PAID;
+            $finalSentAt = $invoice->sent_at;
+        } elseif (! $send) {
+            $finalStatus = Invoice::STATUS_DRAFT;
+            $finalSentAt = null;
+        } else {
+            $finalStatus = Invoice::STATUS_SENT;
+            $finalSentAt = $previousStatus === Invoice::STATUS_DRAFT
+                ? now()
+                : ($invoice->sent_at ?? now());
+        }
+
+        $invoice->payment_method = $validated['payment_method'];
+        $invoice->fill([
             'type' => $validated['type'],
             'recipient_name' => $validated['recipient_name'],
             'recipient_email' => $validated['recipient_email'],
@@ -394,9 +323,21 @@ class InvoiceController extends Controller
             'subtotal' => round($actualSubtotal, 2),
             'tax_amount' => round($taxAmount, 2),
             'total_incl_tax' => round($totalInclTax, 2),
-            'status' => $send ? Invoice::STATUS_SENT : Invoice::STATUS_DRAFT,
-            'sent_at' => $send ? now() : $invoice->sent_at,
+            'status' => $finalStatus,
+            'sent_at' => $finalSentAt,
         ]);
+
+        if ($invoice->payment_method === Invoice::PAYMENT_CASH) {
+            $invoice->invoice_number = null;
+        } elseif ($finalStatus === Invoice::STATUS_DRAFT) {
+            $invoice->invoice_number = null;
+        } elseif ($previousStatus === Invoice::STATUS_PAID) {
+            // keep existing invoice_number
+        } elseif ($send && $previousStatus === Invoice::STATUS_DRAFT && $invoice->payment_method === Invoice::PAYMENT_CARD && $finalSentAt) {
+            $invoice->assignCardInvoiceNumberIfNeeded($finalSentAt);
+        }
+
+        $invoice->save();
 
         $invoice->lines()->delete();
 
@@ -421,9 +362,9 @@ class InvoiceController extends Controller
             ]);
         }
 
-        if ($send && $invoice->status !== Invoice::STATUS_SENT) {
+        if ($send && $previousStatus === Invoice::STATUS_DRAFT) {
             try {
-                $this->sendInvoiceEmail($invoice);
+                $this->sendInvoiceEmail($invoice->fresh(['lines', 'job.company', 'job.customer']));
             } catch (\Exception $e) {
                 \Log::error('Failed to send invoice email: '.$e->getMessage());
 

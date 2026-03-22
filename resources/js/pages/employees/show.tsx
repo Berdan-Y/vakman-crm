@@ -16,7 +16,16 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/app-layout';
-import { Briefcase, Mail, Phone, User, Calendar, Edit, Trash2 } from 'lucide-react';
+import {
+    Briefcase,
+    Building2,
+    Mail,
+    Phone,
+    User,
+    Calendar,
+    Edit,
+    Trash2,
+} from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,6 +46,7 @@ type EmployeeDetail = {
     name: string;
     email: string;
     phone: string | null;
+    kvk_number: string | null;
     role: string | null;
     join_date: string | null;
     total_jobs: number;
@@ -145,6 +155,12 @@ export default function EmployeesShow({ employee }: Props) {
                                 >
                                     {employee.phone}
                                 </a>
+                            </div>
+                        )}
+                        {employee.kvk_number && (
+                            <div className="flex items-center gap-2 text-sm">
+                                <Building2 className="text-muted-foreground size-4" />
+                                <span>{employee.kvk_number}</span>
                             </div>
                         )}
                         {employee.join_date && (

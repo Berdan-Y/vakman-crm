@@ -17,6 +17,7 @@ class Employee extends Model
         'name',
         'email',
         'phone',
+        'kvk_number',
         'role',
         'join_date',
         'invitation_token',

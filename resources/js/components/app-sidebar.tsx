@@ -3,6 +3,7 @@ import {
     BarChart3,
     BookOpen,
     Briefcase,
+    Calendar,
     Folder,
     LayoutGrid,
     MapPin,
@@ -52,6 +53,11 @@ export function AppSidebar() {
             title: t('nav.jobs'),
             href: '/jobs',
             icon: Briefcase,
+        },
+        {
+            title: t('nav.calendar'),
+            href: '/calendar',
+            icon: Calendar,
         },
         {
             title: t('nav.reports'),

@@ -14,6 +14,16 @@ class Company extends Model
     protected $fillable = [
         'name',
         'industry',
+        'street_address',
+        'postal_code',
+        'city',
+        'country',
+        'tax_number',
+        'kvk_number',
+        'email',
+        'account_holder',
+        'bank_name',
+        'bank_account_number',
     ];
 
     public function users(): BelongsToMany
@@ -51,5 +61,28 @@ class Company extends Model
     public function whatsappCredential(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(WhatsAppCredential::class, 'company_id');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toInertiaArray(string $role): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'industry' => $this->industry,
+            'street_address' => $this->street_address,
+            'postal_code' => $this->postal_code,
+            'city' => $this->city,
+            'country' => $this->country,
+            'tax_number' => $this->tax_number,
+            'kvk_number' => $this->kvk_number,
+            'email' => $this->email,
+            'account_holder' => $this->account_holder,
+            'bank_name' => $this->bank_name,
+            'bank_account_number' => $this->bank_account_number,
+            'role' => $role,
+        ];
     }
 }
