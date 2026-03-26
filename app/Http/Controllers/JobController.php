@@ -79,6 +79,7 @@ class JobController extends Controller
         $jobs = $query->get()->map(function (Job $job) {
             $customerInvoicesTotal = $job->invoices
                 ->where('type', 'customer')
+                ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PAID])
                 ->sum('amount');
 
             $displayPrice = $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;
@@ -148,6 +149,7 @@ class JobController extends Controller
 
         $customerInvoicesTotal = $job->invoices
             ->where('type', 'customer')
+            ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PAID])
             ->sum('amount');
 
         $displayPrice = $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;
@@ -278,6 +280,7 @@ class JobController extends Controller
             'job_type_other' => ['nullable', 'string', 'max:255'],
             'send_notification' => ['nullable', 'boolean'],
             'vat_number' => ['nullable', 'string', 'max:64'],
+            'price_includes_tax' => ['nullable', 'boolean'],
         ]);
 
         $jobType = JobType::where('company_id', $companyId)
@@ -317,6 +320,7 @@ class JobController extends Controller
             'employee_id' => $validated['employee_id'] ?? null,
             'description' => $validated['description'] ?? null,
             'price' => $validated['price'],
+            'price_includes_tax' => ! empty($validated['price_includes_tax']),
             'date' => $validated['date'],
             'scheduled_time' => $scheduledTime,
             'recommendation' => $validated['recommendation'] ?? null,
@@ -414,6 +418,7 @@ class JobController extends Controller
                 Rule::exists('job_types', 'id')->where('company_id', $companyId),
             ],
             'job_type_other' => ['nullable', 'string', 'max:255'],
+            'price_includes_tax' => ['nullable', 'boolean'],
         ]);
 
         $jobType = JobType::where('company_id', $companyId)
@@ -428,6 +433,7 @@ class JobController extends Controller
         $job->update([
             'description' => $validated['description'] ?? null,
             'price' => $validated['price'],
+            'price_includes_tax' => ! empty($validated['price_includes_tax']),
             'employee_id' => $validated['employee_id'] ?? null,
             'date' => $validated['date'],
             'scheduled_time' => $scheduledTime,

@@ -54,7 +54,12 @@ class EmployeeController extends Controller
 
         $employee->load('jobs.customer');
         $jobs = $employee->jobs()->orderByDesc('date')->get();
-        $totalRevenue = (float) $employee->jobs()->where('is_paid', true)->sum('price');
+        $paidJobs = $employee->jobs()->where('is_paid', true)->get();
+        $totalRevenue = (float) $paidJobs->sum(function (Job $job): float {
+            $p = (float) $job->price;
+
+            return $job->price_includes_tax ? $p / 1.21 : $p;
+        });
 
         return Inertia::render('employees/show', [
             'employee' => [
@@ -79,6 +84,7 @@ class EmployeeController extends Controller
                     'description' => $job->description,
                     'date' => $job->date->format('Y-m-d'),
                     'price' => (float) $job->price,
+                    'price_includes_tax' => (bool) $job->price_includes_tax,
                     'is_paid' => $job->is_paid,
                     'invoice_number' => $job->invoice_number,
                     'customer' => $job->customer ? [

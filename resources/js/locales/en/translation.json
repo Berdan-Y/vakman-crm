@@ -250,6 +250,8 @@
         "performance": "Performance",
         "jobHistory": "Job history",
         "noJobsYet": "No jobs yet.",
+        "bulkInvoiceSend": "Create & send bulk invoice ({{count}} jobs driven)",
+        "doneJobs": "Done jobs ({{count}})",
         "createEmployeeTitle": "Add employee",
         "createEmployeeDesc": "Add a new employee to your team",
         "updateEmployee": "Update employee",

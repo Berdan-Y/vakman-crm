@@ -52,6 +52,7 @@ Route::middleware(['auth', 'verified', 'company'])->group(function () {
     Route::put('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
     Route::delete('employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
     Route::post('employees/{employee}/send-invitation', [EmployeeInvitationController::class, 'sendInvitation'])->name('employees.send-invitation');
+    Route::post('employees/{employee}/bulk-invoice', [InvoiceController::class, 'bulkInvoiceForJobs'])->name('employees.bulk-invoice');
     Route::get('jobs', [JobController::class, 'index'])->name('jobs.index');
     Route::get('jobs/create', [JobController::class, 'create'])->name('jobs.create');
     Route::post('jobs', [JobController::class, 'store'])->name('jobs.store');

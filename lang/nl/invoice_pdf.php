@@ -19,7 +19,7 @@ return [
     'vat_line' => 'BTW :rate% van :base:',
     'total_incl' => 'TOTAAL BEDRAG (EUR)',
     'amount_due' => 'TE BETALEN BEDRAG (EUR)',
-    'payment_card' => 'Pin / kaart',
+    'payment_card' => 'iDeal / Pin',
     'payment_cash' => 'Contant',
     'footer_tax' => 'Btw-nr.',
     'footer_kvk' => 'KvK',

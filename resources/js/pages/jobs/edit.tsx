@@ -52,6 +52,7 @@ type JobDetail = {
     job_type_id: number | null;
     job_type_other: string | null;
     price: number;
+    price_includes_tax?: boolean;
     employee_id: number | null;
     customer: {
         id: number;
@@ -74,7 +75,9 @@ type Props = {
 
 export default function JobsEdit({ job, employees, jobOptions, jobTypes }: Props) {
     const { t } = useTranslation();
-    const [priceIncludesTax, setPriceIncludesTax] = useState(false);
+    const [priceIncludesTax, setPriceIncludesTax] = useState(
+        !!job.price_includes_tax,
+    );
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: t('nav.jobs'), href: '/jobs' },
@@ -85,6 +88,7 @@ export default function JobsEdit({ job, employees, jobOptions, jobTypes }: Props
     const form = useForm({
         description: job.description || '',
         price: String(job.price),
+        price_includes_tax: !!job.price_includes_tax,
         employee_id: job.employee_id,
         date: job.date,
         scheduled_time: job.scheduled_time || '',
@@ -333,7 +337,10 @@ export default function JobsEdit({ job, employees, jobOptions, jobTypes }: Props
                                     <Switch
                                         id="price-includes-tax"
                                         checked={priceIncludesTax}
-                                        onCheckedChange={setPriceIncludesTax}
+                                        onCheckedChange={(checked) => {
+                                            setPriceIncludesTax(!!checked);
+                                            form.setData('price_includes_tax', !!checked);
+                                        }}
                                     />
                                     <Label
                                         htmlFor="price-includes-tax"

@@ -48,6 +48,7 @@ class ReportController extends Controller
 
                 $customerInvoicesTotal = $job->invoices
                     ->where('type', 'customer')
+                    ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PAID])
                     ->sum('amount');
 
                 return $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;
@@ -157,6 +158,7 @@ class ReportController extends Controller
                 'total' => (float) $jobs->sum(function ($job) {
                     $customerInvoicesTotal = $job->invoices
                         ->where('type', 'customer')
+                        ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PAID])
                         ->sum('amount');
 
                     return $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;
@@ -259,6 +261,7 @@ class ReportController extends Controller
 
                 $customerInvoicesTotal = $job->invoices
                     ->where('type', 'customer')
+                    ->whereIn('status', [Invoice::STATUS_SENT, Invoice::STATUS_PAID])
                     ->sum('amount');
 
                 return $customerInvoicesTotal > 0 ? $customerInvoicesTotal : (float) $job->price;

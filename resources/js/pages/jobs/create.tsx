@@ -135,6 +135,7 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
         job_type_other: '',
         description: '',
         price: '',
+        price_includes_tax: false as boolean,
         employee_id: null as number | null,
         date: new Date().toISOString().slice(0, 10),
         scheduled_time: '',
@@ -879,7 +880,10 @@ export default function JobsCreate({ employees, jobOptions, jobTypes }: Props) {
                                             <Switch
                                                 id="price-includes-tax"
                                                 checked={priceIncludesTax}
-                                                onCheckedChange={setPriceIncludesTax}
+                                                onCheckedChange={(checked) => {
+                                                    setPriceIncludesTax(!!checked);
+                                                    form.setData('price_includes_tax', !!checked);
+                                                }}
                                             />
                                             <Label
                                                 htmlFor="price-includes-tax"

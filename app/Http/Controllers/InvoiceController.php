@@ -285,6 +285,137 @@ class InvoiceController extends Controller
         }
     }
 
+    public function bulkInvoiceForJobs(Request $request, Employee $employee): RedirectResponse
+    {
+        $companyId = (int) session('current_company_id');
+        if ($employee->company_id !== $companyId) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'job_ids' => ['required', 'array', 'min:1'],
+            'job_ids.*' => ['integer', 'distinct', 'exists:crm_jobs,id'],
+        ]);
+
+        $jobIds = array_map('intval', $validated['job_ids']);
+
+        $matchingJobs = Job::query()
+            ->where('company_id', $companyId)
+            ->where('employee_id', $employee->id)
+            ->whereIn('id', $jobIds)
+            ->get();
+
+        if ($matchingJobs->count() !== count($jobIds)) {
+            return redirect()->back()
+                ->with('error', __('Some selected jobs are no longer available.'));
+        }
+
+        $openJobs = $matchingJobs->where('is_paid', false)->values();
+        if ($openJobs->count() !== $matchingJobs->count()) {
+            return redirect()->back()
+                ->with('error', __('Some selected jobs are already done.'));
+        }
+
+        $count = $openJobs->count();
+        if ($count === 0) {
+            return redirect()->back()
+                ->with('error', __('No jobs selected.'));
+        }
+
+        if (! filled($employee->email)) {
+            return redirect()->back()
+                ->with('error', __('Employee has no email address.'));
+        }
+
+        // Normalize each job price to be exclusive of tax before summing.
+        $normalizedTotal = (float) $openJobs->sum(function (Job $job): float {
+            $price = (float) $job->price;
+
+            if ($job->price_includes_tax) {
+                return $price / 1.21;
+            }
+
+            return $price;
+        });
+
+        $total = $normalizedTotal;
+        $priceIncludesTax = false;
+        $taxRate = 21.00;
+
+        // Calculate tax fields (same approach as store()).
+        $subtotal = $total;
+        if ($priceIncludesTax) {
+            $actualSubtotal = $subtotal / 1.21;
+            $taxAmount = $subtotal - $actualSubtotal;
+            $totalInclTax = $subtotal;
+        } else {
+            $actualSubtotal = $subtotal;
+            $taxAmount = $subtotal * 0.21;
+            $totalInclTax = $subtotal + $taxAmount;
+        }
+
+        $sentAt = now();
+        $description = $count.' opdrachten gereden.';
+
+        $invoice = Invoice::create([
+            'company_id' => $companyId,
+            'crm_job_id' => null,
+            'type' => Invoice::TYPE_EMPLOYEE,
+            'payment_method' => Invoice::PAYMENT_CARD,
+            'invoice_number' => null,
+            'recipient_name' => $employee->name,
+            'recipient_email' => $employee->email,
+            'recipient_vat_number' => null,
+            'billing_customer_id' => null,
+            'billing_employee_id' => $employee->id,
+            'amount' => $total,
+            'subtotal' => round($actualSubtotal, 2),
+            'tax_amount' => round($taxAmount, 2),
+            'total_incl_tax' => round($totalInclTax, 2),
+            'status' => Invoice::STATUS_SENT,
+            'sent_at' => $sentAt,
+        ]);
+
+        // Assign card invoice reference (INV-...) for nicer UX on the employee/job screens.
+        $invoice->assignCardInvoiceNumberIfNeeded($sentAt);
+        $invoice->save();
+
+        $lineTotal = $total;
+        $lineTaxAmount = $priceIncludesTax
+            ? $lineTotal - ($lineTotal / 1.21)
+            : $lineTotal * 0.21;
+
+        \App\Models\InvoiceLine::create([
+            'invoice_id' => $invoice->id,
+            'description' => $description,
+            'quantity' => 1,
+            'unit_price' => $total,
+            'total' => $lineTotal,
+            'tax_rate' => $taxRate,
+            'tax_amount' => round($lineTaxAmount, 2),
+            'order' => 0,
+        ]);
+
+        try {
+            $this->sendInvoiceEmail($invoice);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send bulk invoice email: '.$e->getMessage());
+
+            return redirect()->back()
+                ->with('error', __('Invoice created but failed to send email. Please check your mail configuration.'));
+        }
+
+        Job::query()
+            ->whereIn('id', $openJobs->pluck('id')->all())
+            ->update([
+                'is_paid' => true,
+                'invoice_number' => $invoice->invoice_number,
+            ]);
+
+        return redirect()->route('employees.show', $employee)
+            ->with('success', __('Bulk invoice sent successfully.'));
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $companyId = (int) session('current_company_id');

@@ -19,6 +19,7 @@ class Job extends Model
         'employee_id',
         'description',
         'price',
+        'price_includes_tax',
         'is_paid',
         'date',
         'scheduled_time',
@@ -33,6 +34,7 @@ class Job extends Model
     {
         return [
             'price' => 'decimal:2',
+            'price_includes_tax' => 'boolean',
             'is_paid' => 'boolean',
             'date' => 'date',
             'job_info' => 'array',

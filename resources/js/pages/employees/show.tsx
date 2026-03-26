@@ -27,7 +27,13 @@ import {
     Trash2,
 } from 'lucide-react';
 import type { BreadcrumbItem } from '@/types';
-import { useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '@/lib/utils';
 
@@ -36,10 +42,20 @@ type Job = {
     description: string | null;
     date: string;
     price: number;
+    price_includes_tax?: boolean;
     is_paid: boolean;
     invoice_number: string | null;
     customer: { id: number; name: string; phone: string | null } | null;
 };
+
+/** Matches invoice / bulk-invoice: stored price is excl. VAT unless price_includes_tax. */
+function jobPriceExcludingTax(job: Job): number {
+    const p = job.price;
+    if (job.price_includes_tax) {
+        return p / 1.21;
+    }
+    return p;
+}
 
 type EmployeeDetail = {
     id: number;
@@ -75,6 +91,58 @@ export default function EmployeesShow({ employee }: Props) {
 
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [sendingInvitation, setSendingInvitation] = useState(false);
+    const [selectedJobIds, setSelectedJobIds] = useState<number[]>([]);
+    const [bulkInvoiceSubmitting, setBulkInvoiceSubmitting] = useState(false);
+    const [doneJobsOpen, setDoneJobsOpen] = useState(false);
+
+    const openJobs = useMemo(
+        () => employee.jobs.filter((j) => !j.is_paid),
+        [employee.jobs]
+    );
+    const doneJobs = useMemo(
+        () => employee.jobs.filter((j) => j.is_paid),
+        [employee.jobs]
+    );
+
+    const openJobIds = useMemo(() => openJobs.map((j) => j.id), [openJobs]);
+    const allOpenSelected =
+        openJobs.length > 0 && selectedJobIds.length === openJobs.length;
+
+    const toggleSelectAllOpenJobs = (checked: boolean) => {
+        if (checked) {
+            setSelectedJobIds(openJobIds);
+        } else {
+            setSelectedJobIds([]);
+        }
+    };
+
+    const toggleOpenJob = (jobId: number, checked: boolean) => {
+        setSelectedJobIds((prev) => {
+            if (checked) {
+                if (prev.includes(jobId)) return prev;
+                return [...prev, jobId];
+            }
+
+            return prev.filter((id) => id !== jobId);
+        });
+    };
+
+    const handleBulkInvoice = () => {
+        if (selectedJobIds.length === 0) return;
+
+        setBulkInvoiceSubmitting(true);
+        router.post(
+            `/employees/${employee.id}/bulk-invoice`,
+            { job_ids: selectedJobIds },
+            {
+                onFinish: () => setBulkInvoiceSubmitting(false),
+                onSuccess: () => {
+                    setSelectedJobIds([]);
+                    setDoneJobsOpen(false);
+                },
+            }
+        );
+    };
 
     const handleDelete = () => {
         router.delete(`/employees/${employee.id}`, {
@@ -239,7 +307,23 @@ export default function EmployeesShow({ employee }: Props) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>{t('employees.jobHistory')}</CardTitle>
+                        <CardTitle className="flex items-center justify-between gap-4">
+                            <span>{t('employees.jobHistory')}</span>
+                            <Button
+                                onClick={handleBulkInvoice}
+                                disabled={
+                                    bulkInvoiceSubmitting ||
+                                    selectedJobIds.length === 0
+                                }
+                                variant="default"
+                            >
+                                {bulkInvoiceSubmitting
+                                    ? t('common.loading')
+                                    : t('employees.bulkInvoiceSend', {
+                                          count: selectedJobIds.length,
+                                      })}
+                            </Button>
+                        </CardTitle>
                         <CardDescription>
                             {t('employees.jobHistoryDesc')}
                         </CardDescription>
@@ -250,70 +334,210 @@ export default function EmployeesShow({ employee }: Props) {
                                 {t('employees.noJobsYet')}
                             </p>
                         ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm min-w-[600px]">
-                                    <thead>
-                                        <tr className="border-b text-left">
-                                            <th className="pb-2 font-medium">
-                                                {t('common.date')}
-                                            </th>
-                                            <th className="pb-2 font-medium">
-                                                {t('common.description')}
-                                            </th>
-                                            <th className="pb-2 font-medium">
-                                                {t('jobs.customer')}
-                                            </th>
-                                            <th className="pb-2 font-medium text-right">
-                                                {t('common.price')}
-                                            </th>
-                                            <th className="pb-2 font-medium text-right">
-                                                {t('common.status')}
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {employee.jobs.map((job) => (
-                                            <tr
-                                                key={job.id}
-                                                className="border-b border-sidebar-border/70"
-                                            >
-                                                <td className="py-2">
-                                                    {job.date}
-                                                </td>
-                                                <td className="py-2">
-                                                    {job.description || '—'}
-                                                </td>
-                                                <td className="py-2">
-                                                    {job.customer ? (
-                                                        <Link
-                                                            href={`/jobs/${job.id}`}
-                                                            className="text-primary hover:underline"
-                                                        >
-                                                            {job.customer.name}
-                                                        </Link>
-                                                    ) : (
-                                                            '—'
-                                                        )}
-                                                </td>
-                                                <td className="py-2 text-right">
-                                                    {formatCurrency(job.price)}
-                                                </td>
-                                                <td className="py-2 text-right">
-                                                    {job.is_paid ? (
-                                                        <span className="text-green-600">
-                                                            {t('jobs.paid')}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-amber-600">
-                                                            {t('jobs.unpaid')}
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                            <>
+                                {openJobs.length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">
+                                        {t('employees.noJobsYet')}
+                                    </p>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm min-w-[700px]">
+                                            <thead>
+                                                <tr className="border-b text-left">
+                                                    <th className="pb-2 font-medium w-10">
+                                                        <Checkbox
+                                                            checked={
+                                                                allOpenSelected
+                                                            }
+                                                            onCheckedChange={(
+                                                                checked,
+                                                            ) =>
+                                                                toggleSelectAllOpenJobs(
+                                                                    checked as boolean,
+                                                                )
+                                                            }
+                                                        />
+                                                    </th>
+                                                    <th className="pb-2 font-medium">
+                                                        {t('common.date')}
+                                                    </th>
+                                                    <th className="pb-2 font-medium">
+                                                        {t('common.description')}
+                                                    </th>
+                                                    <th className="pb-2 font-medium">
+                                                        {t('jobs.customer')}
+                                                    </th>
+                                                    <th className="pb-2 font-medium text-right">
+                                                        {t('jobs.priceExclTax')}
+                                                    </th>
+                                                    <th className="pb-2 font-medium text-right">
+                                                        {t('common.status')}
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {openJobs.map((job) => (
+                                                    <tr
+                                                        key={job.id}
+                                                        className="border-b border-sidebar-border/70"
+                                                    >
+                                                        <td className="py-2 w-10">
+                                                            <Checkbox
+                                                                checked={selectedJobIds.includes(
+                                                                    job.id,
+                                                                )}
+                                                                onCheckedChange={(
+                                                                    checked,
+                                                                ) =>
+                                                                    toggleOpenJob(
+                                                                        job.id,
+                                                                        checked as boolean,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-2">
+                                                            {job.date}
+                                                        </td>
+                                                        <td className="py-2">
+                                                            {job.description ||
+                                                                '—'}
+                                                        </td>
+                                                        <td className="py-2">
+                                                            {job.customer ? (
+                                                                <Link
+                                                                    href={`/jobs/${job.id}`}
+                                                                    className="text-primary hover:underline"
+                                                                >
+                                                                    {
+                                                                        job.customer.name
+                                                                    }
+                                                                </Link>
+                                                            ) : (
+                                                                '—'
+                                                            )}
+                                                        </td>
+                                                        <td className="py-2 text-right">
+                                                            {formatCurrency(
+                                                                jobPriceExcludingTax(
+                                                                    job,
+                                                                ),
+                                                            )}
+                                                        </td>
+                                                        <td className="py-2 text-right">
+                                                            <span className="text-amber-600">
+                                                                {t('jobs.unpaid')}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                {doneJobs.length > 0 && (
+                                    <div className="mt-4">
+                                        <Collapsible
+                                            open={doneJobsOpen}
+                                            onOpenChange={setDoneJobsOpen}
+                                        >
+                                            <CollapsibleTrigger asChild>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="w-full justify-start"
+                                                >
+                                                    {t('employees.doneJobs', {
+                                                        count: doneJobs.length,
+                                                    })}
+                                                </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent>
+                                                <div className="mt-3 overflow-x-auto">
+                                                    <table className="w-full text-sm min-w-[700px]">
+                                                        <thead>
+                                                            <tr className="border-b text-left">
+                                                                <th className="pb-2 font-medium">
+                                                                    {t(
+                                                                        'common.date',
+                                                                    )}
+                                                                </th>
+                                                                <th className="pb-2 font-medium">
+                                                                    {t(
+                                                                        'common.description',
+                                                                    )}
+                                                                </th>
+                                                                <th className="pb-2 font-medium">
+                                                                    {t(
+                                                                        'jobs.customer',
+                                                                    )}
+                                                                </th>
+                                                                <th className="pb-2 font-medium text-right">
+                                                                    {t(
+                                                                        'jobs.priceExclTax',
+                                                                    )}
+                                                                </th>
+                                                                <th className="pb-2 font-medium text-right">
+                                                                    {t(
+                                                                        'common.status',
+                                                                    )}
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {doneJobs.map(
+                                                                (job) => (
+                                                                    <tr
+                                                                        key={
+                                                                            job.id
+                                                                        }
+                                                                        className="border-b border-sidebar-border/70"
+                                                                    >
+                                                                        <td className="py-2">
+                                                                            {job.date}
+                                                                        </td>
+                                                                        <td className="py-2">
+                                                                            {job.description ||
+                                                                                '—'}
+                                                                        </td>
+                                                                        <td className="py-2">
+                                                                            {job.customer ? (
+                                                                                <Link
+                                                                                    href={`/jobs/${job.id}`}
+                                                                                    className="text-primary hover:underline"
+                                                                                >
+                                                                                    {
+                                                                                        job.customer.name
+                                                                                    }
+                                                                                </Link>
+                                                                            ) : (
+                                                                                '—'
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="py-2 text-right">
+                                                                            {formatCurrency(
+                                                                                jobPriceExcludingTax(
+                                                                                    job,
+                                                                                ),
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="py-2 text-right">
+                                                                            <span className="text-green-600">
+                                                                                {t('jobs.paid')}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                ),
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </CardContent>
                 </Card>
